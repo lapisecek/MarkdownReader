@@ -176,20 +176,6 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
 
   return (
     <div style={{ display: isActive ? 'block' : 'none' }} className="h-full w-full relative">
-        {editor && editor.isActive('table') && (
-          <div className="absolute top-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-1 p-1 shadow-xl rounded-lg border backdrop-blur-md transition-all animate-in fade-in slide-in-from-top-4"
-               style={{ backgroundColor: settings.isDark ? 'rgba(42,42,42,0.85)' : 'rgba(255,255,255,0.9)', borderColor: settings.isDark ? '#3f3f46' : '#e4e4e7' }}>
-            <button onClick={() => editor.chain().focus().addColumnBefore().run()} className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded text-blue-600 dark:text-blue-400 transition-colors" title="Add Column Left"><Plus size={14} /></button>
-            <button onClick={() => editor.chain().focus().addColumnAfter().run()} className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded text-blue-600 dark:text-blue-400 transition-colors" title="Add Column Right"><Plus size={14} /></button>
-            <button onClick={() => editor.chain().focus().deleteColumn().run()} className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/40 rounded text-red-600 dark:text-red-400 transition-colors" title="Delete Column"><Minus size={14} /></button>
-            <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
-            <button onClick={() => editor.chain().focus().addRowBefore().run()} className="p-1.5 hover:bg-green-100 dark:hover:bg-green-900/40 rounded text-green-600 dark:text-green-400 transition-colors" title="Add Row Above"><ArrowUp size={14} /></button>
-            <button onClick={() => editor.chain().focus().addRowAfter().run()} className="p-1.5 hover:bg-green-100 dark:hover:bg-green-900/40 rounded text-green-600 dark:text-green-400 transition-colors" title="Add Row Below"><ArrowDown size={14} /></button>
-            <button onClick={() => editor.chain().focus().deleteRow().run()} className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/40 rounded text-red-600 dark:text-red-400 transition-colors" title="Delete Row"><Minus size={14} /></button>
-            <div className="w-px h-4 bg-gray-300 dark:bg-gray-600 mx-1" />
-            <button onClick={() => editor.chain().focus().deleteTable().run()} className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/40 rounded text-red-600 dark:text-red-400 font-bold transition-colors" title="Delete Table"><X size={14} /></button>
-          </div>
-        )}
       <EditorContent editor={editor} className="h-full" />
     </div>
   );
@@ -386,6 +372,7 @@ function App() {
 
   // Table Size Picker State
   const [showTablePicker, setShowTablePicker] = useState(false);
+  const [tablePickerLeft, setTablePickerLeft] = useState(0);
   const [hoverRow, setHoverRow] = useState(0);
   const [hoverCol, setHoverCol] = useState(0);
 
@@ -960,7 +947,11 @@ function App() {
                   {/* Table Size Picker */}
                   <div className="relative flex items-center justify-center h-full">
                     <button 
-                      onClick={() => setShowTablePicker(p => !p)} 
+                      onClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setTablePickerLeft(rect.left + rect.width / 2);
+                        setShowTablePicker(p => !p);
+                      }} 
                       className="p-1.5 rounded-md hover:bg-black/10 dark:hover:bg-white/10 transition-colors flex flex-col items-center justify-center relative group"
                       style={{ color: activeEditor.isActive('table') ? themeColors.accent : (dk ? '#ccc' : '#444') }}
                       title="Insert Table"
@@ -969,8 +960,8 @@ function App() {
                     </button>
                     
                     {showTablePicker && (
-                      <div className="fixed bottom-14 left-1/2 -translate-x-1/2 p-3 border shadow-2xl rounded-xl z-50 transition-all animate-in fade-in slide-in-from-bottom-2"
-                        style={{ backgroundColor: dk ? '#1e1e1e' : '#ffffff', borderColor: dk ? '#333' : '#e5e7eb' }}>
+                      <div className="fixed bottom-14 p-3 border shadow-2xl rounded-xl z-50 transition-all animate-in fade-in slide-in-from-bottom-2"
+                        style={{ left: tablePickerLeft, transform: 'translateX(-50%)', backgroundColor: dk ? '#1e1e1e' : '#ffffff', borderColor: dk ? '#333' : '#e5e7eb' }}>
                         <div className="flex justify-between items-center mb-2">
                           <span className="text-[11px] font-semibold tracking-wide uppercase" style={{ color: dk ? '#aaa' : '#666' }}>
                             {hoverCol > 0 && hoverRow > 0 ? `${hoverCol} x ${hoverRow} Table` : 'Select Size'}
