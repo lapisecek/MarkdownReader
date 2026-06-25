@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-color: #ffffff;
+    --text-color: #1a1a1a;
+    --text-muted: #666666;
+    --selection-bg: rgba(0, 122, 255, 0.3);
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(0, 0, 0, 0.1);
+    --accent-color: #007aff;
+  }
+
+  .dark {
+    --bg-color: #121212;
+    --text-color: #f0f0f0;
+    --text-muted: #a0a0a0;
+    --selection-bg: rgba(10, 132, 255, 0.4);
+    --glass-bg: rgba(30, 30, 30, 0.6);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --accent-color: #0a84ff;
+  }
+
+  html, body {
+    @apply h-full w-full overflow-hidden transition-colors duration-300;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+  }
+
+  ::selection {
+    background: var(--selection-bg);
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--text-muted);
+  border-radius: 4px;
+  opacity: 0.5;
+}
+
+/* Tiptap Editor Styles */
+.ProseMirror {
+  @apply outline-none min-h-full pb-32 text-lg leading-relaxed;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--text-muted);
+  pointer-events: none;
+  height: 0;
+}
+
+.ProseMirror h1 { @apply text-4xl font-bold mt-8 mb-4; }
+.ProseMirror h2 { @apply text-3xl font-semibold mt-8 mb-4 border-b border-gray-200 dark:border-gray-800 pb-2; }
+.ProseMirror h3 { @apply text-2xl font-semibold mt-6 mb-3; }
+.ProseMirror p { @apply mb-4; }
+.ProseMirror ul { @apply list-disc list-inside mb-4 pl-4; }
+.ProseMirror ol { @apply list-decimal list-inside mb-4 pl-4; }
+.ProseMirror blockquote { @apply border-l-4 border-blue-500 pl-4 py-1 italic text-gray-600 dark:text-gray-400 my-4 bg-blue-50 dark:bg-blue-900/20 rounded-r-lg; }
+.ProseMirror code { @apply bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded text-sm font-mono text-pink-600 dark:text-pink-400; }
+.ProseMirror pre { @apply bg-gray-900 text-gray-100 p-4 rounded-lg my-4 overflow-x-auto; }
+.ProseMirror pre code { @apply bg-transparent text-inherit p-0; }

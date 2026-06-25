@@ -1,0 +1,9 @@
+diff --git a/index.html b/index.html
+index 72bc6fd..08064a3 100644
+--- a/index.html
++++ b/index.html
+@@ -10,3 +10,3 @@
+     <div id="app"></div>
+-    <script type="module" src="/src/main.ts"></script>
++    <script type="module" src="/src/main.tsx"></script>
+   </body>

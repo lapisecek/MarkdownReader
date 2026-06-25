@@ -1,0 +1,200 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --bg-color: #ffffff;
+    --text-color: #111111;
+    --text-muted: #555555;
+    --selection-bg: rgba(0, 122, 255, 0.25);
+    --accent-color: #3b82f6;
+    --sidebar-bg: #f4f4f5;
+    --panel-bg: #e4e4e7;
+    --panel-border: #d4d4d8;
+    --hover-bg: #d4d4d8;
+    --active-bg: #ffffff;
+  }
+  .dark {
+    --bg-color: #121212;
+    --text-color: #f0f0f0;
+    --text-muted: #a0a0a0;
+    --selection-bg: rgba(10, 132, 255, 0.4);
+    --accent-color: #3b82f6;
+    --sidebar-bg: #151515;
+    --panel-bg: #1a1a1a;
+    --panel-border: #2a2a2a;
+    --hover-bg: #2a2a2a;
+    --active-bg: #121212;
+  }
+  html, body {
+    @apply h-full w-full overflow-hidden;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  body.resizing, body.resizing * { transition: none !important; }
+  ::selection { background: var(--selection-bg); }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background-color: rgba(128,128,128,0.25); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background-color: rgba(128,128,128,0.5); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* Tiptap */
+.ProseMirror { @apply outline-none min-h-full pb-32 leading-relaxed; }
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder); float: left; color: var(--text-muted); pointer-events: none; height: 0;
+}
+.ProseMirror h1 { @apply text-4xl font-bold mt-16 mb-6; }
+.ProseMirror h2 { @apply text-3xl font-semibold mt-10 mb-4 border-b border-gray-200 dark:border-gray-800 pb-2; }
+.ProseMirror h3 { @apply text-2xl font-semibold mt-6 mb-3; }
+.ProseMirror h4 { @apply text-xl font-semibold mt-5 mb-2; }
+.ProseMirror p { @apply mb-4; }
+.ProseMirror ul { @apply list-disc list-outside mb-4 pl-6; }
+.ProseMirror ol { @apply list-decimal list-outside mb-4 pl-6; }
+.ProseMirror li { @apply mb-1; }
+.ProseMirror li p { margin-top: 0.25em; margin-bottom: 0.25em; }
+.ProseMirror blockquote {
+  @apply border-l-4 border-blue-500 pl-4 py-1 italic my-4 rounded-r-lg;
+  color: var(--text-muted); background: rgba(59,130,246,0.06);
+}
+.dark .ProseMirror blockquote { background: rgba(59,130,246,0.08); }
+.ProseMirror code { @apply px-1.5 py-0.5 rounded text-sm font-mono; background: rgba(0,0,0,0.06); color: #c7254e; }
+.dark .ProseMirror code { background: rgba(255,255,255,0.08); color: #f472b6; }
+.ProseMirror pre {
+  @apply p-4 rounded-lg my-4 overflow-x-auto text-sm font-mono leading-relaxed;
+  background: #1e1e2e; color: #cdd6f4; border: 1px solid rgba(255,255,255,0.06);
+}
+.ProseMirror pre code, .dark .ProseMirror pre code { @apply bg-transparent p-0 border-none; background: transparent !important; color: inherit; font-size: inherit; }
+.ProseMirror hr { @apply my-8 border-gray-200 dark:border-gray-800; }
+
+/* Tables */
+.ProseMirror table {
+  @apply w-full mb-6 table-auto border-separate border-spacing-0 overflow-hidden rounded-lg max-w-full;
+  border: 1px solid var(--panel-border);
+}
+.ProseMirror table:has(col[style*="width"]) {
+  @apply table-fixed;
+}
+.ProseMirror table td, .ProseMirror table th {
+  @apply p-2.5 px-4 align-top relative;
+  min-width: 1em;
+  border-bottom: 1px solid var(--panel-border);
+  border-right: 1px solid var(--panel-border);
+}
+.ProseMirror table tr:last-child td, .ProseMirror table tr:last-child th {
+  border-bottom: none;
+}
+.ProseMirror table tr td:last-child, .ProseMirror table tr th:last-child {
+  border-right: none;
+}
+.ProseMirror table th {
+  @apply font-bold bg-gray-100 dark:bg-gray-800 text-left;
+}
+.ProseMirror table tr:nth-child(even) td {
+  @apply bg-gray-50/50 dark:bg-white/[0.02];
+}
+.ProseMirror table p {
+  margin: 0;
+}
+.ProseMirror table .selectedCell:after {
+  @apply absolute inset-0 pointer-events-none z-10;
+  background: rgba(128, 128, 128, 0.15);
+  content: "";
+}
+.ProseMirror table .column-resize-handle {
+  @apply absolute top-0 -right-[1px] -bottom-[1px] w-[2px] pointer-events-none;
+  background-color: var(--accent-color);
+  opacity: 0.6;
+}
+
+/* Syntax - Dark (Catppuccin) */
+.hljs-keyword,.hljs-selector-tag,.hljs-built_in { color: #cba6f7; }
+.hljs-string,.hljs-attr,.hljs-addition { color: #a6e3a1; }
+.hljs-number,.hljs-literal { color: #fab387; }
+.hljs-comment,.hljs-quote { color: #6c7086; font-style: italic; }
+.hljs-title,.hljs-section { color: #89b4fa; font-weight: 600; }
+.hljs-type,.hljs-name { color: #f9e2af; }
+.hljs-variable,.hljs-template-variable { color: #f38ba8; }
+.hljs-symbol,.hljs-bullet { color: #f2cdcd; }
+.hljs-meta { color: #fab387; }
+.hljs-deletion { color: #f38ba8; }
+.hljs-regexp { color: #f5c2e7; }
+.hljs-params { color: #94e2d5; }
+.hljs-punctuation { color: #bac2de; }
+.hljs-tag { color: #89b4fa; }
+.hljs-operator { color: #89dceb; }
+.hljs-property { color: #89b4fa; }
+.hljs-function { color: #89b4fa; }
+
+/* Syntax - Light (One Light) */
+:root .ProseMirror pre { background: #fafafa; color: #383a42; border-color: #e0e0e0; }
+:root .hljs-keyword,:root .hljs-selector-tag,:root .hljs-built_in { color: #a626a4; }
+:root .hljs-string,:root .hljs-attr,:root .hljs-addition { color: #50a14f; }
+:root .hljs-number,:root .hljs-literal { color: #986801; }
+:root .hljs-comment,:root .hljs-quote { color: #a0a1a7; font-style: italic; }
+:root .hljs-title,:root .hljs-section { color: #4078f2; font-weight: 600; }
+:root .hljs-type,:root .hljs-name { color: #c18401; }
+:root .hljs-variable,:root .hljs-template-variable { color: #e45649; }
+:root .hljs-deletion { color: #e45649; }
+:root .hljs-operator { color: #0184bc; }
+:root .hljs-property { color: #4078f2; }
+:root .hljs-function { color: #4078f2; }
+:root .hljs-tag { color: #e45649; }
+.dark .ProseMirror pre { background: #1e1e2e; color: #cdd6f4; border-color: rgba(255,255,255,0.08); }
+
+/* Resize handle */
+.resize-handle { width: 4px; cursor: col-resize; background: transparent; transition: background-color 0.15s ease; flex-shrink: 0; }
+.resize-handle:hover,.resize-handle.active { background-color: var(--accent-color); }
+
+/* Toggle switch */
+.toggle-switch { @apply relative w-10 h-5 rounded-full cursor-pointer transition-colors duration-200; }
+.toggle-switch::after {
+  content: ''; @apply absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform duration-200;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+.toggle-switch.on { background-color: var(--accent-color); }
+.toggle-switch.on::after { transform: translateX(20px); }
+.toggle-switch:not(.on) { background-color: rgba(128,128,128,0.3); }
+
+/* Custom Range Slider */
+input[type="range"] {
+  -webkit-appearance: none; appearance: none; height: 5px; border-radius: 3px;
+  background: rgba(128,128,128,0.2); outline: none; cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--accent-color); cursor: pointer; border: 2.5px solid white;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2); transition: transform 0.15s ease;
+}
+input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+input[type="range"]::-webkit-slider-thumb:active { transform: scale(1.05); }
+
+/* Settings tab content animation */
+.settings-content-enter { animation: stFade 0.2s cubic-bezier(0.16,1,0.3,1); }
+@keyframes stFade { from { opacity: 0; transform: translateX(6px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes settingsAppear { from { opacity: 0; transform: scale(0.95) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+
+/* Settings tab button */
+.settings-tab { @apply px-4 py-2 text-sm font-medium rounded-lg cursor-pointer transition-colors; }
+.settings-tab.active { background: var(--active-bg); color: var(--accent-color); box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.settings-tab:not(.active) { color: var(--text-muted); }
+.settings-tab:not(.active):hover { background: var(--hover-bg); }
+
+/* Search Highlights */
+.search-result {
+  background-color: rgba(255, 255, 0, 0.4);
+  border-radius: 2px;
+}
+.dark .search-result {
+  background-color: rgba(255, 255, 0, 0.25);
+}
+.search-result-active {
+  background-color: rgba(255, 165, 0, 0.6);
+}
+.dark .search-result-active {
+  background-color: rgba(255, 165, 0, 0.45);
+}
