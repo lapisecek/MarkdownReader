@@ -719,10 +719,10 @@ function App() {
   const folderName = rootDir ? rootDir.split(/[/\\]/).pop() : null;
 
   const showSidebar = !isMinimalistMode && !isReading && isSidebarOpen;
-  const showStructure = !isMinimalistMode && isStructureOpen;
+  const showStructure = (!isMinimalistMode || isReading) && isStructureOpen;
   const showTabs = !isMinimalistMode && !isReading;
   const showBottomBar = !isMinimalistMode && !isReading && isBottomBarOpen && activeEditor;
-  const showFileInfo = !isMinimalistMode;
+  const showFileInfo = !isMinimalistMode || isReading;
 
   const wordCount = activeTab.content ? activeTab.content.trim().split(/\s+/).filter(Boolean).length : 0;
   const charCount = activeTab.content ? activeTab.content.length : 0;
