@@ -6,8 +6,7 @@
     --bg-color: #fcfcfc;
     --text-color: #334155;
     --text-muted: #64748b;
-    --selection-bg: rgba(0, 122, 255, 0.25);
-    --accent-color: #3b82f6;
+    --selection-bg: color-mix(in srgb, var(--accent-color) 25%, transparent);
     --sidebar-bg: #f1f5f9;
     --panel-bg: #e2e8f0;
     --panel-border: #cbd5e1;
@@ -18,8 +17,7 @@
     --bg-color: #121212;
     --text-color: #f0f0f0;
     --text-muted: #a0a0a0;
-    --selection-bg: rgba(10, 132, 255, 0.4);
-    --accent-color: #3b82f6;
+    --selection-bg: color-mix(in srgb, var(--accent-color) 40%, transparent);
     --sidebar-bg: #151515;
     --panel-bg: #1a1a1a;
     --panel-border: #2a2a2a;
