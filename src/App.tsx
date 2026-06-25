@@ -404,7 +404,10 @@ function App() {
 
   // Apply dark mode and theme colors to the document body
   useEffect(() => { dk ? document.documentElement.classList.add('dark') : document.documentElement.classList.remove('dark'); }, [dk]);
-  useEffect(() => { document.documentElement.style.setProperty('--accent-color', themeColors.accent); }, [themeColors.accent]);
+  useEffect(() => { 
+    document.documentElement.style.setProperty('--accent-color', themeColors.accent);
+    document.documentElement.style.setProperty('--accent-bg', themeColors.accentBg);
+  }, [themeColors.accent, themeColors.accentBg]);
 
   const updateSettings = useCallback((partial: Partial<AppSettings>) => {
     setSettings(prev => { const next = { ...prev, ...partial }; saveSettingsToLS(next); return next; });

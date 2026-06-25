@@ -3,16 +3,16 @@
 
 @layer base {
   :root {
-    --bg-color: #ffffff;
-    --text-color: #111111;
-    --text-muted: #555555;
+    --bg-color: #fcfcfc;
+    --text-color: #334155;
+    --text-muted: #64748b;
     --selection-bg: rgba(0, 122, 255, 0.25);
     --accent-color: #3b82f6;
-    --sidebar-bg: #f4f4f5;
-    --panel-bg: #e4e4e7;
-    --panel-border: #d4d4d8;
-    --hover-bg: #d4d4d8;
-    --active-bg: #ffffff;
+    --sidebar-bg: #f1f5f9;
+    --panel-bg: #e2e8f0;
+    --panel-border: #cbd5e1;
+    --hover-bg: #e2e8f0;
+    --active-bg: #fcfcfc;
   }
   .dark {
     --bg-color: #121212;
@@ -58,12 +58,12 @@
 .ProseMirror li { @apply mb-1; }
 .ProseMirror li p { margin-top: 0.25em; margin-bottom: 0.25em; }
 .ProseMirror blockquote {
-  @apply border-l-4 border-blue-500 pl-4 py-1 italic my-4 rounded-r-lg;
-  color: var(--text-muted); background: rgba(59,130,246,0.06);
+  @apply border-l-4 pl-4 py-1 italic my-4 rounded-r-lg;
+  color: var(--text-muted); background: var(--accent-bg); border-left-color: var(--accent-color);
 }
-.dark .ProseMirror blockquote { background: rgba(59,130,246,0.08); }
-.ProseMirror code { @apply px-1.5 py-0.5 rounded text-sm font-mono; background: rgba(0,0,0,0.06); color: #c7254e; }
-.dark .ProseMirror code { background: rgba(255,255,255,0.08); color: #f472b6; }
+.dark .ProseMirror blockquote { background: var(--accent-bg); }
+.ProseMirror code { @apply px-1.5 py-0.5 rounded text-sm font-mono; background: var(--accent-bg); color: var(--accent-color); }
+.dark .ProseMirror code { background: var(--accent-bg); color: var(--accent-color); }
 .ProseMirror pre {
   @apply p-4 rounded-lg my-4 overflow-x-auto text-sm font-mono leading-relaxed;
   background: #1e1e2e; color: #cdd6f4; border: 1px solid rgba(255,255,255,0.06);
@@ -92,10 +92,12 @@
   border-right: none;
 }
 .ProseMirror table th {
-  @apply font-bold bg-gray-100 dark:bg-gray-800 text-left;
+  @apply font-bold text-left;
+  background-color: var(--accent-bg);
+  color: var(--accent-color);
 }
 .ProseMirror table tr:nth-child(even) td {
-  @apply bg-gray-50/50 dark:bg-white/[0.02];
+  background-color: var(--accent-bg);
 }
 .ProseMirror table p {
   margin: 0;
