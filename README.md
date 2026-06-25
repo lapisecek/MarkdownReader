@@ -21,11 +21,12 @@ A premium, highly polished desktop application for reading and editing Markdown 
 
 ## Quick Install
 
-The easiest way to get started is to download the pre-compiled executable from the GitHub Releases page:
+The easiest way to get started is to download the pre-compiled Windows package from the GitHub Releases page:
 
 1. Navigate to the **[Releases](https://github.com/lapisecek/MarkdownReader/releases)** page on GitHub.
-2. Download the latest `MarkdownReader.exe` asset.
-3. Double-click the downloaded `.exe` to run the application immediately (no installation required).
+2. Download the latest `MarkdownReader-win32-x64.zip` asset.
+3. Extract the downloaded `.zip` file to a folder of your choice.
+4. Double-click the `MarkdownReader.exe` file inside the extracted folder to run the application immediately.
 
 ## Development Build
 
