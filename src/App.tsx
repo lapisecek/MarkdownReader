@@ -961,16 +961,15 @@ function App() {
                   <div className="relative flex items-center justify-center h-full">
                     <button 
                       onClick={() => setShowTablePicker(p => !p)} 
-                      className="p-1.5 rounded-md hover:bg-black/10 dark:hover:bg-white/10 transition-colors flex flex-col items-center gap-0.5 relative group"
+                      className="p-1.5 rounded-md hover:bg-black/10 dark:hover:bg-white/10 transition-colors flex flex-col items-center justify-center relative group"
                       style={{ color: activeEditor.isActive('table') ? themeColors.accent : (dk ? '#ccc' : '#444') }}
                       title="Insert Table"
                     >
                       <TableIcon size={13} />
-                      <span className="text-[9px] font-medium leading-none">Insert Table</span>
                     </button>
                     
                     {showTablePicker && (
-                      <div className="absolute bottom-full left-0 mb-3 p-3 border shadow-2xl rounded-xl z-50 transition-all"
+                      <div className="fixed bottom-14 left-1/2 -translate-x-1/2 p-3 border shadow-2xl rounded-xl z-50 transition-all animate-in fade-in slide-in-from-bottom-2"
                         style={{ backgroundColor: dk ? '#1e1e1e' : '#ffffff', borderColor: dk ? '#333' : '#e5e7eb' }}>
                         <div className="flex justify-between items-center mb-2">
                           <span className="text-[11px] font-semibold tracking-wide uppercase" style={{ color: dk ? '#aaa' : '#666' }}>
