@@ -19,9 +19,17 @@ A premium, highly polished desktop application for reading and editing Markdown 
 * **Styling**: TailwindCSS
 * **Editor**: Tiptap (ProseMirror), Lowlight
 
-## Installation & Build
+## Quick Install
 
-Ensure you have Node.js and npm installed on your system.
+The easiest way to get started is to download the pre-compiled executable from the GitHub Releases page:
+
+1. Navigate to the **[Releases](https://github.com/lapisecek/MarkdownReader/releases)** page on GitHub.
+2. Download the latest `MarkdownReader.exe` asset.
+3. Double-click the downloaded `.exe` to run the application immediately (no installation required).
+
+## Development Build
+
+If you wish to run from source or build the application yourself, ensure you have Node.js and npm installed on your system.
 
 1. Clone the repository
 2. Install dependencies:
@@ -37,7 +45,6 @@ Ensure you have Node.js and npm installed on your system.
    npm run electron:build
    ```
    The compiled `.exe` file will be located in the `dist-electron/MarkdownReader-win32-x64` directory.
-
 ## Security Overview
 
 The application follows strict Electron security guidelines and best practices:
