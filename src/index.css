@@ -133,7 +133,7 @@
 .hljs-function { color: #89b4fa; }
 
 /* Syntax - Light (One Light) */
-:root .ProseMirror pre { background: color-mix(in srgb, var(--accent-bg) 50%, #fafafa); color: #383a42; border-color: var(--panel-border); }
+:root .ProseMirror pre { background: color-mix(in srgb, var(--accent-color) 5%, #fafafa); color: #383a42; border-color: var(--panel-border); }
 :root .hljs-keyword,:root .hljs-selector-tag,:root .hljs-built_in { color: #a626a4; }
 :root .hljs-string,:root .hljs-attr,:root .hljs-addition { color: #50a14f; }
 :root .hljs-number,:root .hljs-literal { color: #986801; }
@@ -146,7 +146,7 @@
 :root .hljs-property { color: #4078f2; }
 :root .hljs-function { color: #4078f2; }
 :root .hljs-tag { color: #e45649; }
-.dark .ProseMirror pre { background: color-mix(in srgb, var(--accent-bg) 60%, #1a1a1a); color: #cdd6f4; border-color: rgba(255,255,255,0.08); }
+.dark .ProseMirror pre { background: color-mix(in srgb, var(--accent-color) 8%, #151515); color: #cdd6f4; border-color: color-mix(in srgb, var(--accent-color) 20%, transparent); }
 
 /* Resize handle */
 .resize-handle { width: 4px; cursor: col-resize; background: transparent; transition: background-color 0.15s ease; flex-shrink: 0; }
