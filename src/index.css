@@ -93,11 +93,11 @@
 }
 .ProseMirror table th {
   @apply font-bold text-left;
-  background-color: var(--accent-bg);
+  background-color: color-mix(in srgb, var(--accent-color) 20%, transparent);
   color: var(--accent-color);
 }
 .ProseMirror table tr:nth-child(even) td {
-  background-color: var(--accent-bg);
+  background-color: color-mix(in srgb, var(--accent-color) 4%, transparent);
 }
 .ProseMirror table p {
   margin: 0;
