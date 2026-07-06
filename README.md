@@ -1,60 +1,73 @@
 # MarkdownReader
 
-A premium, highly polished desktop application for reading and editing Markdown files. Built with Electron, React, and Tiptap, this editor prioritizes typography, aesthetic design, and a distraction-free user experience while offering powerful under-the-hood capabilities.
+Current version: 1.2.0
 
-## Features
+MarkdownReader is a Windows desktop Markdown editor built with Electron, React, TypeScript, and Tiptap. It combines tabbed editing, a folder explorer, and a polished writing surface for working with multiple documents in one window.
 
-* **Rich Text Editing**: Powered by Tiptap, offering robust Markdown support, seamless code block highlighting, and intuitive text formatting.
-* **Intelligent Tables**: Interactive table creation with a visual grid picker, and a contextual floating menu for seamless row/column management.
-* **Workspace Explorer**: Integrated file and directory sidebar, allowing you to manage multiple documents in a split-tab view.
-* **Advanced Theming**: Multiple curated color palettes (Ocean, Forest, Sunset, Midnight) with full Dark Mode support and tailored CSS highlights.
-* **Distraction-Free Modes**: Toggle between a minimalist writing view, reading mode, or full editor UI with a single keystroke.
-* **Custom Window Chrome**: Frameless application window with custom drawn title bars and controls for a native, seamless aesthetic.
-* **Responsive Architecture**: Debounced state management and background processes ensure typing remains buttery smooth, even on massive documents.
+## Highlights
 
-## Technology Stack
+- Tabbed editing for multiple open documents
+- Folder explorer for browsing local directories and opening Markdown files
+- Rich Markdown editing for tables, task lists, links, images, headings, code blocks, block quotes, highlights, subscript, superscript, definition lists, emoji, and footnotes
+- Reading mode and editable mode for switching between review and writing
+- Theme presets with dark mode support and adjustable editor settings
+- Auto-save, save sounds, ambient audio, and keyboard shortcuts
+- Fullscreen image viewing inside the editor
+- Native Windows file handling and unsaved-changes prompts
 
-* **Core**: Electron
-* **Frontend**: React, TypeScript, Vite
-* **Styling**: TailwindCSS
-* **Editor**: Tiptap (ProseMirror), Lowlight
+## Requirements
 
-## Quick Install
+- Windows
+- Node.js and npm for local development
 
-The easiest way to get started is to download the pre-compiled Windows package from the GitHub Releases page:
+## Install
 
-1. Navigate to the **[Releases](https://github.com/lapisecek/MarkdownReader/releases)** page on GitHub.
-2. Download the latest `MarkdownReader-win32-x64.zip` asset.
-3. Extract the downloaded `.zip` file to a folder of your choice.
-4. Double-click the `MarkdownReader.exe` file inside the extracted folder to run the application immediately.
+Download the latest Windows release from the [GitHub Releases page](https://github.com/lapisecek/MarkdownReader/releases).
 
-## Development Build
+1. Download the latest `MarkdownReader-win32-x64.zip` asset.
+2. Extract the archive.
+3. Launch `MarkdownReader.exe` from the extracted folder.
 
-If you wish to run from source or build the application yourself, ensure you have Node.js and npm installed on your system.
+## Development
 
-1. Clone the repository
-2. Install dependencies:
+To run the app from source:
+
+1. Install dependencies:
+
    ```bash
    npm install
    ```
-3. Run the development server:
+
+2. Start the Vite dev server:
+
    ```bash
    npm run dev
    ```
-4. Build the executable for Windows:
+
+3. Launch Electron against the dev server:
+
    ```bash
-   npm run electron:build
+   npm run electron:dev
    ```
-   The compiled `.exe` file will be located in the `dist-electron/MarkdownReader-win32-x64` directory.
-## Security Overview
 
-The application follows strict Electron security guidelines and best practices:
+## Build
 
-* **Context Isolation**: Enabled (`contextIsolation: true`). The renderer process runs in a sandboxed environment and has no direct access to the Node.js API or the underlying operating system.
-* **Node Integration**: Disabled (`nodeIntegration: false`). Malicious scripts cannot require Node modules or execute system commands.
-* **Secure IPC Bridge**: Inter-Process Communication (IPC) is strictly gated through a `contextBridge` in `preload.cjs`. The frontend can only invoke specific, predefined functions (such as opening native file dialogs) rather than sending arbitrary generic events.
-* **XSS Mitigation**: The editor relies on Tiptap's secure rendering engine, which safely parses Markdown and sanitizes HTML outputs, preventing Cross-Site Scripting via malicious document payloads.
+To produce a Windows package:
+
+```bash
+npm run electron:build
+```
+
+The packaged app is written to `dist-electron/MarkdownReader-win32-x64`.
+
+## Security
+
+The app keeps Electron security boundaries in place:
+
+- Context isolation is enabled.
+- Node integration is disabled in the renderer.
+- Renderer access to native features is routed through the preload bridge.
 
 ## License
 
-This project is open-source and available under the MIT License.
+MIT
