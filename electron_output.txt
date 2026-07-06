@@ -1,0 +1,45 @@
+2026-07-06T15:23:03.996Z - App starting. argv: ["C:\\Users\\adamk\\Desktop\\MarkdownReader\\node_modules\\electron\\dist\\electron.exe","."], cwd: C:\Users\adamk\Desktop\MarkdownReader
+2026-07-06T15:23:04.001Z - gotTheLock: true
+2026-07-06T15:23:06.742Z - did-finish-load event. Calling handleFileOpenArg with process.argv: ["C:\\Users\\adamk\\Desktop\\MarkdownReader\\node_modules\\electron\\dist\\electron.exe","."], process.cwd: C:\Users\adamk\Desktop\MarkdownReader
+2026-07-06T15:23:06.742Z - handleFileOpenArg. argv: ["C:\\Users\\adamk\\Desktop\\MarkdownReader\\node_modules\\electron\\dist\\electron.exe","."], workingDirectory: C:\Users\adamk\Desktop\MarkdownReader
+2026-07-06T15:23:06.743Z - Found filePath: undefined
+2026-07-06T15:23:06.793Z - renderer-ready event. isRendererReady was false, fileToOpen is null
+2026-07-06T15:23:06.798Z - renderer-ready event. isRendererReady was true, fileToOpen is null
+2026-07-06T15:23:07.076Z - did-finish-load event. Calling handleFileOpenArg with process.argv: ["C:\\Users\\adamk\\Desktop\\MarkdownReader\\node_modules\\electron\\dist\\electron.exe","."], process.cwd: C:\Users\adamk\Desktop\MarkdownReader
+2026-07-06T15:23:07.077Z - handleFileOpenArg. argv: ["C:\\Users\\adamk\\Desktop\\MarkdownReader\\node_modules\\electron\\dist\\electron.exe","."], workingDirectory: C:\Users\adamk\Desktop\MarkdownReader
+2026-07-06T15:23:07.077Z - Found filePath: undefined
+2026-07-06T15:23:07.149Z - renderer-ready event. isRendererReady was true, fileToOpen is null
+2026-07-06T15:23:07.153Z - renderer-ready event. isRendererReady was true, fileToOpen is null
+2026-07-06T15:23:07.332Z - did-finish-load event. Calling handleFileOpenArg with process.argv: ["C:\\Users\\adamk\\Desktop\\MarkdownReader\\node_modules\\electron\\dist\\electron.exe","."], process.cwd: C:\Users\adamk\Desktop\MarkdownReader
+2026-07-06T15:23:07.333Z - handleFileOpenArg. argv: ["C:\\Users\\adamk\\Desktop\\MarkdownReader\\node_modules\\electron\\dist\\electron.exe","."], workingDirectory: C:\Users\adamk\Desktop\MarkdownReader
+2026-07-06T15:23:07.333Z - Found filePath: undefined
+2026-07-06T15:23:07.370Z - renderer-ready event. isRendererReady was true, fileToOpen is null
+2026-07-06T15:23:07.373Z - renderer-ready event. isRendererReady was true, fileToOpen is null
+2026-07-06T15:23:07.519Z - did-finish-load event. Calling handleFileOpenArg with process.argv: ["C:\\Users\\adamk\\Desktop\\MarkdownReader\\node_modules\\electron\\dist\\electron.exe","."], process.cwd: C:\Users\adamk\Desktop\MarkdownReader
+2026-07-06T15:23:07.519Z - handleFileOpenArg. argv: ["C:\\Users\\adamk\\Desktop\\MarkdownReader\\node_modules\\electron\\dist\\electron.exe","."], workingDirectory: C:\Users\adamk\Desktop\MarkdownReader
+2026-07-06T15:23:07.520Z - Found filePath: undefined
+2026-07-06T15:23:07.557Z - renderer-ready event. isRendererReady was true, fileToOpen is null
+2026-07-06T15:23:07.560Z - renderer-ready event. isRendererReady was true, fileToOpen is null
+2026-07-06T15:23:07.705Z - did-finish-load event. Calling handleFileOpenArg with process.argv: ["C:\\Users\\adamk\\Desktop\\MarkdownReader\\node_modules\\electron\\dist\\electron.exe","."], process.cwd: C:\Users\adamk\Desktop\MarkdownReader
+2026-07-06T15:23:07.705Z - handleFileOpenArg. argv: ["C:\\Users\\adamk\\Desktop\\MarkdownReader\\node_modules\\electron\\dist\\electron.exe","."], workingDirectory: C:\Users\adamk\Desktop\MarkdownReader
+2026-07-06T15:23:07.705Z - Found filePath: undefined
+2026-07-06T15:23:07.745Z - renderer-ready event. isRendererReady was true, fileToOpen is null
+2026-07-06T15:23:07.749Z - renderer-ready event. isRendererReady was true, fileToOpen is null
+2026-07-06T15:23:07.918Z - did-finish-load event. Calling handleFileOpenArg with process.argv: ["C:\\Users\\adamk\\Desktop\\MarkdownReader\\node_modules\\electron\\dist\\electron.exe","."], process.cwd: C:\Users\adamk\Desktop\MarkdownReader
+2026-07-06T15:23:07.919Z - handleFileOpenArg. argv: ["C:\\Users\\adamk\\Desktop\\MarkdownReader\\node_modules\\electron\\dist\\electron.exe","."], workingDirectory: C:\Users\adamk\Desktop\MarkdownReader
+2026-07-06T15:23:07.919Z - Found filePath: undefined
+2026-07-06T15:23:07.956Z - renderer-ready event. isRendererReady was true, fileToOpen is null
+2026-07-06T15:23:07.960Z - renderer-ready event. isRendererReady was true, fileToOpen is null
+2026-07-06T15:23:08.122Z - did-finish-load event. Calling handleFileOpenArg with process.argv: ["C:\\Users\\adamk\\Desktop\\MarkdownReader\\node_modules\\electron\\dist\\electron.exe","."], process.cwd: C:\Users\adamk\Desktop\MarkdownReader
+2026-07-06T15:23:08.122Z - handleFileOpenArg. argv: ["C:\\Users\\adamk\\Desktop\\MarkdownReader\\node_modules\\electron\\dist\\electron.exe","."], workingDirectory: C:\Users\adamk\Desktop\MarkdownReader
+2026-07-06T15:23:08.123Z - Found filePath: undefined
+2026-07-06T15:23:08.167Z - renderer-ready event. isRendererReady was true, fileToOpen is null
+2026-07-06T15:23:08.172Z - renderer-ready event. isRendererReady was true, fileToOpen is null
+2026-07-06T15:23:08.339Z - did-finish-load event. Calling handleFileOpenArg with process.argv: ["C:\\Users\\adamk\\Desktop\\MarkdownReader\\node_modules\\electron\\dist\\electron.exe","."], process.cwd: C:\Users\adamk\Desktop\MarkdownReader
+2026-07-06T15:23:08.340Z - handleFileOpenArg. argv: ["C:\\Users\\adamk\\Desktop\\MarkdownReader\\node_modules\\electron\\dist\\electron.exe","."], workingDirectory: C:\Users\adamk\Desktop\MarkdownReader
+2026-07-06T15:23:08.340Z - Found filePath: undefined
+2026-07-06T15:23:08.383Z - renderer-ready event. isRendererReady was true, fileToOpen is null
+2026-07-06T15:23:08.387Z - renderer-ready event. isRendererReady was true, fileToOpen is null
+2026-07-06T15:23:08.565Z - did-finish-load event. Calling handleFileOpenArg with process.argv: ["C:\\Users\\adamk\\Desktop\\MarkdownReader\\node_modules\\electron\\dist\\electron.exe","."], process.cwd: C:\Users\adamk\Desktop\MarkdownReader
+2026-07-06T15:23:08.565Z - handleFileOpenArg. argv: ["C:\\Users\\adamk\\Desktop\\MarkdownReader\\node_modules\\electron\\dist\\electron.exe","."], workingDirectory: C:\Users\adamk\Desktop\MarkdownReader
+2026-07-06T15:23:08.566Z - Found filePath: undefined

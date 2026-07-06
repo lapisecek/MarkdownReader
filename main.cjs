@@ -1,10 +1,18 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+
+function logToFile(msg) {
+  try {
+    fs.appendFileSync(path.join(__dirname, 'electron_output.txt'), `${new Date().toISOString()} - ${msg}\n`, 'utf-8');
+  } catch (e) {}
+}
 
 let mainWindow;
 let currentFilePath = null;
 const isDev = !app.isPackaged;
+
+logToFile(`App starting. argv: ${JSON.stringify(process.argv)}, cwd: ${process.cwd()}`);
 
 let fileToOpen = null;
 let isRendererReady = false;
@@ -19,11 +27,13 @@ if (process.defaultApp) {
 }
 
 const gotTheLock = app.requestSingleInstanceLock();
+logToFile(`gotTheLock: ${gotTheLock}`);
 
 if (!gotTheLock) {
   app.quit();
 } else {
   app.on('second-instance', (event, commandLine, workingDirectory) => {
+    logToFile(`second-instance event. commandLine: ${JSON.stringify(commandLine)}, workingDirectory: ${workingDirectory}`);
     // Someone tried to run a second instance, we should focus our window.
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
@@ -41,32 +51,48 @@ if (!gotTheLock) {
 }
 
 function handleFileOpenArg(argv, workingDirectory = null) {
-  const filePath = argv.find(arg => arg.toLowerCase().endsWith('.md'));
-  if (filePath) {
+  logToFile(`handleFileOpenArg. argv: ${JSON.stringify(argv)}, workingDirectory: ${workingDirectory}`);
+  const rawFilePath = argv.find(arg => {
+    const cleaned = arg.replace(/^"+|"+$/g, '');
+    return cleaned.toLowerCase().endsWith('.md');
+  });
+  logToFile(`Found rawFilePath: ${rawFilePath}`);
+  if (rawFilePath) {
+    const filePath = rawFilePath.replace(/^"+|"+$/g, '');
     let resolvedPath = filePath;
     if (!path.isAbsolute(filePath)) {
       resolvedPath = workingDirectory 
         ? path.resolve(workingDirectory, filePath) 
         : path.resolve(filePath);
     }
+    logToFile(`Resolved path: ${resolvedPath}`);
     if (fs.existsSync(resolvedPath)) {
+      logToFile(`File exists. isRendererReady: ${isRendererReady}`);
       if (isRendererReady) {
         openFile(resolvedPath);
       } else {
         fileToOpen = resolvedPath;
+        logToFile(`Set fileToOpen = ${resolvedPath}`);
       }
+    } else {
+      logToFile(`File does not exist: ${resolvedPath}`);
     }
   }
 }
 
 function openFile(filePath) {
   try {
+    logToFile(`openFile: reading ${filePath}`);
     const content = fs.readFileSync(filePath, 'utf-8');
     currentFilePath = filePath;
     if (mainWindow && !mainWindow.isDestroyed()) {
+      logToFile(`Sending file-loaded event to renderer`);
       mainWindow.webContents.send('file-loaded', { filePath, content });
+    } else {
+      logToFile(`mainWindow is null or destroyed`);
     }
   } catch (err) {
+    logToFile(`Failed to read file: ${err.message}`);
     console.error("Failed to read file", err);
   }
 }
@@ -91,7 +117,23 @@ function createWindow() {
     mainWindow.show();
   });
 
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    logToFile(`RENDERER CONSOLE: [Level ${level}] ${message} (from ${sourceId}:${line})`);
+  });
+
   mainWindow.setMenuBarVisibility(false);
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (url !== mainWindow.webContents.getURL()) {
+      event.preventDefault();
+      shell.openExternal(url);
+    }
+  });
 
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
@@ -133,6 +175,7 @@ function createWindow() {
   });
 
   mainWindow.webContents.on('did-finish-load', () => {
+    logToFile(`did-finish-load event. Calling handleFileOpenArg with process.argv: ${JSON.stringify(process.argv)}, process.cwd: ${process.cwd()}`);
     handleFileOpenArg(process.argv, process.cwd());
   });
 }
@@ -142,6 +185,7 @@ app.on('window-all-closed', () => {
 });
 
 ipcMain.on('renderer-ready', () => {
+  logToFile(`renderer-ready event. isRendererReady was ${isRendererReady}, fileToOpen is ${fileToOpen}`);
   isRendererReady = true;
   if (fileToOpen) {
     openFile(fileToOpen);
@@ -228,4 +272,26 @@ ipcMain.handle('read-file', async (event, filePath) => {
     console.error('Failed to read file', err);
     return { success: false };
   }
+});
+
+ipcMain.handle('set-as-default', async () => {
+  if (process.platform !== 'win32') return { success: false, error: 'Only supported on Windows' };
+  const { exec } = require('child_process');
+  const exePath = process.execPath;
+  const cmd = `reg add "HKCU\\Software\\Classes\\.md" /ve /d "MarkdownReader.Document" /f && ` +
+              `reg add "HKCU\\Software\\Classes\\.md\\OpenWithProgids" /v "MarkdownReader.Document" /d "" /f && ` +
+              `reg add "HKCU\\Software\\Classes\\MarkdownReader.Document" /ve /d "Markdown File" /f && ` +
+              `reg add "HKCU\\Software\\Classes\\MarkdownReader.Document\\DefaultIcon" /ve /d "\\"${exePath}\\",0" /f && ` +
+              `reg add "HKCU\\Software\\Classes\\MarkdownReader.Document\\shell\\open\\command" /ve /d "\\"${exePath}\\" \\"%1\\"" /f && ` +
+              `reg add "HKCU\\Software\\Classes\\Applications\\MarkdownReader.exe\\shell\\open\\command" /ve /d "\\"${exePath}\\" \\"%1\\"" /f`;
+  return new Promise(resolve => {
+    exec(cmd, (error) => {
+      if (error) {
+        console.error('Registry error:', error);
+        resolve({ success: false, error: error.message });
+      } else {
+        resolve({ success: true });
+      }
+    });
+  });
 });

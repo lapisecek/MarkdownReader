@@ -1,14 +1,16 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
+import React from 'react';
+import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from 'tiptap-markdown';
 import {
   X, Folder, File, FolderOpen, Plus, FileText, Save,
   PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, ListTree, Book, Search, ArrowUp, ArrowDown,
   Bold, Italic, Strikethrough, Code, List, ListOrdered, Quote, Terminal, Undo, Redo,
-  Minus, Square, Settings,
+  Minus, Square, Settings, Copy as CopyAllIcon,
   Keyboard, Palette, Volume2, Pen, Eye, EyeOff,
-  Pencil, ChevronUp, ChevronDown, BookOpen, AlignLeft, AlignCenter, AlignRight, AlignJustify, Table as TableIcon
+  Pencil, ChevronUp, ChevronDown, BookOpen, AlignLeft, AlignCenter, AlignRight, AlignJustify, Table as TableIcon,
+  Link2, Image as ImageIcon, CheckSquare, Highlighter, Subscript as SubscriptIcon, Superscript as SuperscriptIcon, Asterisk, ListMinus
 } from 'lucide-react';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { createLowlight, all } from 'lowlight';
@@ -18,6 +20,16 @@ import { TableRow } from '@tiptap/extension-table-row';
 import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { TextAlign } from '@tiptap/extension-text-align';
+import Link from '@tiptap/extension-link';
+import Image from '@tiptap/extension-image';
+import { CustomTaskList, CustomTaskItem } from './extensions/TaskLists';
+import { CustomHighlight, CustomSubscript, CustomSuperscript } from './extensions/Marks';
+import { CustomHeading } from './extensions/Heading';
+import { FootnoteReference, Footnote, FootnoteContainer, FootnoteSep } from './extensions/Footnotes';
+import { DefList, DefTerm, DefDescription } from './extensions/DefList';
+import { Emoji } from './extensions/Emoji';
+import { soundManager } from './utils/SoundManager';
+import { FullscreenImageViewer } from './components/FullscreenImageViewer';
 import appIconImg from '../icon.ico';
 
 const lowlight = createLowlight(all);
@@ -43,6 +55,7 @@ declare global {
       minimizeWindow: () => void;
       maximizeWindow: () => void;
       closeWindow: () => void;
+      setAsDefault: () => Promise<{ success: boolean; error?: string }>;
     }
   }
 }
@@ -78,6 +91,7 @@ interface AppSettings {
   showStatusBar: boolean;
   sidebarWidth: number;
   spellCheck: boolean;
+  copyAsMarkdown: boolean;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -86,7 +100,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   typewriterSound: false, saveSound: true, ambientSound: false,
   notificationSound: true, backgroundMusic: false, backgroundMusicTrack: 'none',
   soundVolume: 50, animationsEnabled: true, showStatusBar: true,
-  sidebarWidth: 260, spellCheck: false,
+  sidebarWidth: 260, spellCheck: false, copyAsMarkdown: true,
 };
 
 const THEME_COLORS: Record<AppTheme, { accent: string, accentBg: string, label: string }> = {
@@ -104,7 +118,9 @@ const SHORTCUTS = [
   { label: 'Italic', keys: 'Ctrl+I' }, { label: 'Strikethrough', keys: 'Ctrl+Shift+X' },
   { label: 'Inline Code', keys: 'Ctrl+E' }, { label: 'Code Block', keys: 'Ctrl+Alt+C' },
   { label: 'H1 / H2 / H3', keys: 'Ctrl+Alt+1/2/3' }, { label: 'Bullet List', keys: 'Ctrl+Shift+8' },
-  { label: 'Numbered List', keys: 'Ctrl+Shift+9' }, { label: 'Blockquote', keys: 'Ctrl+Shift+B' },
+  { label: 'Numbered List', keys: 'Ctrl+Shift+9' }, { label: 'Task List', keys: 'Ctrl+Shift+9' },
+  { label: 'Blockquote', keys: 'Ctrl+Shift+B' }, { label: 'Highlight', keys: 'Ctrl+Shift+H' },
+  { label: 'Subscript / Superscript', keys: 'Ctrl+, / Ctrl+.' },
   { label: 'Undo / Redo', keys: 'Ctrl+Z / Ctrl+Y' },
 ];
 
@@ -113,6 +129,32 @@ const loadSettings = (): AppSettings => {
   return { ...DEFAULT_SETTINGS };
 };
 const saveSettingsToLS = (s: AppSettings) => { try { localStorage.setItem('mdreader-settings', JSON.stringify(s)); } catch {} };
+
+const scrollTargets = new WeakMap<HTMLElement, { target: number, current: number, raf: number }>();
+const smoothScroll = (el: HTMLElement, delta: number) => {
+  let state = scrollTargets.get(el);
+  if (!state) {
+    state = { target: el.scrollLeft, current: el.scrollLeft, raf: 0 };
+    scrollTargets.set(el, state);
+  }
+  state.target += delta * 1.5;
+  state.target = Math.max(0, Math.min(state.target, el.scrollWidth - el.clientWidth));
+  
+  if (!state.raf) {
+    const step = () => {
+      state.current += (state.target - state.current) * 0.15;
+      el.scrollLeft = state.current;
+      if (Math.abs(state.target - state.current) < 0.5) {
+        state.current = state.target;
+        el.scrollLeft = state.target;
+        state.raf = 0;
+      } else {
+        state.raf = requestAnimationFrame(step);
+      }
+    };
+    state.raf = requestAnimationFrame(step);
+  }
+};
 
 /**
  * Helper to get the parent directory path from a full path.
@@ -134,7 +176,8 @@ const getParentDirectory = (dirPath: string) => {
 const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorReady, onSelectionUpdate, settings }: any) => {
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ codeBlock: false }),
+      StarterKit.configure({ codeBlock: false, heading: false }),
+      CustomHeading,
       Markdown,
       CodeBlockLowlight.configure({ lowlight, defaultLanguage: null }),
       SearchExtension,
@@ -143,6 +186,21 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
       TableHeader,
       TableCell,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      Link.configure({ openOnClick: false }),
+      Image,
+      CustomTaskList,
+      CustomTaskItem.configure({ nested: true }),
+      CustomHighlight,
+      CustomSubscript,
+      CustomSuperscript,
+      FootnoteSep,
+      FootnoteContainer,
+      FootnoteReference,
+      Footnote,
+      DefList,
+      DefTerm,
+      DefDescription,
+      Emoji,
     ],
     content: tab.content,
     editable: !tab.isReadOnly,
@@ -150,13 +208,112 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
       setUnsaved(tab.id, true);
       onSelectionUpdate();
     },
-    onSelectionUpdate: () => onSelectionUpdate(),
+    onSelectionUpdate: () => {
+      onSelectionUpdate();
+    },
     editorProps: {
       attributes: {
         class: `prose dark:prose-invert max-w-none focus:outline-none min-h-[calc(100vh-150px)] px-12 pt-6 pb-32 ${tab.isReadOnly ? 'cursor-default' : ''}`,
         style: `font-size: ${settings.fontSize}px; line-height: ${settings.lineHeight}`,
         spellcheck: settings.spellCheck ? 'true' : 'false',
       },
+      handleDOMEvents: {
+        click: (view, event) => {
+          const target = event.target as HTMLElement;
+          // Fullscreen image on click
+          if (target.tagName === 'IMG' && target.hasAttribute('src')) {
+            window.dispatchEvent(new CustomEvent('open-fullscreen-image', { detail: (target as HTMLImageElement).src }));
+            return true;
+          }
+          // Footnote reference -> scroll to footnote definition
+          const fnRef = target.closest('.footnote-ref');
+          if (fnRef) {
+            const id = fnRef.getAttribute('data-footnote-ref-id');
+            if (id) {
+              const fn = document.querySelector(`.footnote-item[data-footnote-id="${id}"]`);
+              if (fn) {
+                fn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                fn.classList.add('search-result-active');
+                setTimeout(() => fn.classList.remove('search-result-active'), 1500);
+              }
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            return true;
+          }
+          // Footnote item -> scroll back to reference
+          const fnItem = target.closest('.footnote-item');
+          if (fnItem) {
+            const id = fnItem.getAttribute('data-footnote-id');
+            if (id) {
+              const ref = document.querySelector(`.footnote-ref[data-footnote-ref-id="${id}"]`);
+              if (ref) {
+                ref.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                ref.classList.add('search-result-active');
+                setTimeout(() => ref.classList.remove('search-result-active'), 1500);
+              }
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            return true;
+          }
+          // Checkbox toggle in reading mode
+          if (tab.isReadOnly) {
+            const checkbox = target.closest('input[type="checkbox"]') || (target.closest('label') ? target.closest('label')?.querySelector('input[type="checkbox"]') : null);
+            if (checkbox || target.tagName === 'INPUT' && target.getAttribute('type') === 'checkbox') {
+              const listItem = target.closest('li[data-type="taskItem"]');
+              if (listItem) {
+                try {
+                  const pos = view.posAtDOM(listItem, 0);
+                  const node = view.state.doc.nodeAt(pos);
+                  if (node && node.type.name === 'taskItem') {
+                    // Temporarily enable editing to toggle the checkbox
+                    const editorInstance = (view as any).editable !== undefined ? view : (view as any)._props?.editor;
+                    const wasEditable = view.editable;
+                    if (!wasEditable) {
+                      (view as any).setProps({ editable: () => true });
+                    }
+                    view.dispatch(view.state.tr.setNodeMarkup(pos, null, { ...node.attrs, checked: !node.attrs.checked }));
+                    if (!wasEditable) {
+                      (view as any).setProps({ editable: () => false });
+                    }
+                    event.preventDefault();
+                    return true;
+                  }
+                } catch (err) {
+                  console.error('Checkbox toggle error:', err);
+                }
+              }
+            }
+          }
+          return false;
+        },
+        keydown: (view, event) => {
+          if (settings.typewriterSound && event.key.length === 1) {
+            soundManager.playTypewriter();
+          }
+          return false;
+        },
+        copy: (view, event) => {
+          if (settings.copyAsMarkdown && !view.state.selection.empty && event.clipboardData) {
+            try {
+              const tempEditor = new Editor({
+                extensions: (view as any)._props.editor.extensionManager.extensions,
+                content: { type: 'doc', content: view.state.selection.content().toJSON() }
+              });
+              const md = tempEditor.storage.markdown.getMarkdown();
+              tempEditor.destroy();
+              event.clipboardData.setData('text/plain', md);
+              window.dispatchEvent(new CustomEvent('show-toast', { detail: 'Copied Markdown to clipboard!' }));
+              event.preventDefault();
+              return true;
+            } catch (err) {
+              console.error(err);
+            }
+          }
+          return false;
+        }
+      }
     },
   });
 
@@ -166,7 +323,7 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
     if (!editor) return;
     // @ts-ignore
     const cur = editor.storage.markdown.getMarkdown();
-    if (cur !== tab.content) editor.commands.setContent(tab.content);
+    if (cur !== tab.content) editor.commands.setContent(tab.content, false);
   }, [tab.content, editor]);
 
   useEffect(() => { 
@@ -207,6 +364,8 @@ const SettingsModal = ({ settings, onUpdate, onClose, themeColors }: {
   settings: AppSettings, onUpdate: (s: Partial<AppSettings>) => void, onClose: () => void, themeColors: typeof THEME_COLORS[AppTheme]
 }) => {
   const [activeTab, setActiveTab] = useState<'appearance' | 'editor' | 'keybindings' | 'sounds'>('appearance');
+  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDevice, setSelectedDevice] = useState<string>('default');
   const stabs = [
     { id: 'appearance' as const, label: 'Appearance', icon: <Palette size={15} /> },
     { id: 'editor' as const, label: 'Editor', icon: <Pen size={15} /> },
@@ -219,7 +378,17 @@ const SettingsModal = ({ settings, onUpdate, onClose, themeColors }: {
   const handleUpdate = (s: Partial<AppSettings>) => {
     historyRef.current.push({ ...settings });
     onUpdate(s);
+    if (s.soundVolume !== undefined) soundManager.setVolume(s.soundVolume);
+    if (s.typewriterSound !== undefined || s.saveSound !== undefined || s.notificationSound !== undefined || s.ambientSound !== undefined || s.backgroundMusic !== undefined) {
+      soundManager.setEnabled(s.typewriterSound || s.saveSound || s.notificationSound || s.ambientSound || s.backgroundMusic || false);
+    }
   };
+
+  useEffect(() => {
+    navigator.mediaDevices.enumerateDevices().then(devices => {
+      setAudioDevices(devices.filter(d => d.kind === 'audiooutput'));
+    }).catch(err => console.error("Could not enumerate audio devices:", err));
+  }, []);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
@@ -280,9 +449,29 @@ const SettingsModal = ({ settings, onUpdate, onClose, themeColors }: {
               <SR label="Line Height" desc={`${settings.lineHeight}`}><RangeSlider min={1.2} max={2.5} step={0.05} value={settings.lineHeight} onChange={(e: any) => handleUpdate({ lineHeight: +e.target.value })} accent={themeColors.accent} /></SR>
               <SR label="Max Width" desc={`${settings.editorMaxWidth}px`}><RangeSlider min={480} max={1400} step={20} value={settings.editorMaxWidth} onChange={(e: any) => handleUpdate({ editorMaxWidth: +e.target.value })} accent={themeColors.accent} /></SR>
               <SR label="Word Wrap"><Toggle checked={settings.wordWrap} onChange={v => handleUpdate({ wordWrap: v })} /></SR>
+              <SR label="Copy as Markdown" desc="Ctrl+C copies raw markdown text instead of rich formatting"><Toggle checked={settings.copyAsMarkdown} onChange={v => handleUpdate({ copyAsMarkdown: v })} /></SR>
               <SR label="Spell Check"><Toggle checked={settings.spellCheck} onChange={v => handleUpdate({ spellCheck: v })} /></SR>
               <SR label="Auto Save"><Toggle checked={settings.autoSave} onChange={v => handleUpdate({ autoSave: v })} /></SR>
               {settings.autoSave && <SR label="Interval" desc={`${settings.autoSaveInterval}s`}><RangeSlider min={5} max={120} step={5} value={settings.autoSaveInterval} onChange={(e: any) => handleUpdate({ autoSaveInterval: +e.target.value })} accent={themeColors.accent} /></SR>}
+              <div className="pt-4 mt-4 border-t border-gray-200 dark:border-gray-800">
+                <button 
+                  onClick={async () => {
+                    const res = await window.api.setAsDefault();
+                    if (res.success) {
+                      alert("Successfully set as the default Markdown editor for Windows!");
+                    } else {
+                      alert("Failed to set as default: " + (res.error || "Unknown error"));
+                    }
+                  }}
+                  className="w-full py-2.5 rounded-lg text-sm font-medium transition-colors"
+                  style={{ backgroundColor: themeColors.accentBg, color: themeColors.accent }}
+                >
+                  Set as Default Windows App
+                </button>
+                <p className="text-[11px] text-gray-500 mt-2 text-center">
+                  Registers this application to open .md files natively.
+                </p>
+              </div>
             </div>
           )}
           {activeTab === 'keybindings' && (
@@ -297,6 +486,15 @@ const SettingsModal = ({ settings, onUpdate, onClose, themeColors }: {
           )}
           {activeTab === 'sounds' && (
             <div className="space-y-6">
+              <SR label="Output Device">
+                <select value={selectedDevice} onChange={e => { setSelectedDevice(e.target.value); soundManager.setOutputDevice(e.target.value); }}
+                  className="text-sm px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none max-w-[200px] truncate">
+                  <option value="default">System Default</option>
+                  {audioDevices.map(d => (
+                    <option key={d.deviceId} value={d.deviceId}>{d.label || 'Unknown Device'}</option>
+                  ))}
+                </select>
+              </SR>
               <SR label="Master Volume" desc={`${settings.soundVolume}%`}><RangeSlider min={0} max={100} step={1} value={settings.soundVolume} onChange={(e: any) => handleUpdate({ soundVolume: +e.target.value })} accent={themeColors.accent} /></SR>
               <SR label="Typewriter Sounds" desc="Click sound on keypress"><Toggle checked={settings.typewriterSound} onChange={v => handleUpdate({ typewriterSound: v })} /></SR>
               <SR label="Save Sound" desc="Chime on save"><Toggle checked={settings.saveSound} onChange={v => handleUpdate({ saveSound: v })} /></SR>
@@ -346,6 +544,9 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMinimalistMode, setIsMinimalistMode] = useState(false);
+  const [isSourceMode, setIsSourceMode] = useState(false);
+  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   
   // Tiptap active editor reference for toolbar commands
   const [activeEditor, setActiveEditor] = useState<any>(null);
@@ -363,6 +564,7 @@ function App() {
   const [showCloseDialog, setShowCloseDialog] = useState(false);
   const [structureWidth, setStructureWidth] = useState(260);
   const [headings, setHeadings] = useState<any[]>([]);
+  const [hoveredHeadingIndex, setHoveredHeadingIndex] = useState<number | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMatchIndex, setSearchMatchIndex] = useState(0);
@@ -375,6 +577,19 @@ function App() {
   const [tablePickerLeft, setTablePickerLeft] = useState(0);
   const [hoverRow, setHoverRow] = useState(0);
   const [hoverCol, setHoverCol] = useState(0);
+
+  const [activePrompt, setActivePrompt] = useState<{
+    type: 'link' | 'image' | 'footnote';
+    title: string;
+    label1: string;
+    placeholder1: string;
+    value1: string;
+    label2?: string;
+    placeholder2?: string;
+    value2?: string;
+    submitLabel: string;
+    onSubmit: (val1: string, val2: string) => void;
+  } | null>(null);
 
   const [tabs, setTabs] = useState<Tab[]>([
     { id: '1', filePath: null, fileName: 'Untitled.md', content: '', isUnsaved: false, isReadOnly: false }
@@ -391,6 +606,12 @@ function App() {
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
 
+  const [isInitializing, setIsInitializing] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setIsInitializing(false), 500);
+    return () => clearTimeout(t);
+  }, []);
+
   /**
    * --------------------------------------------------------------------------
    * THEME & EFFECTS
@@ -399,7 +620,7 @@ function App() {
   const themeColors = THEME_COLORS[settings.theme];
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
   const isReading = activeTab.isReadOnly;
-  const tr = settings.animationsEnabled ? 'all 0.25s cubic-bezier(0.4,0,0.2,1)' : 'none';
+  const tr = (settings.animationsEnabled && !isInitializing) ? 'all 0.25s cubic-bezier(0.4,0,0.2,1)' : 'none';
   const dk = settings.isDark;
 
   // Apply dark mode and theme colors to the document body
@@ -408,6 +629,25 @@ function App() {
     document.documentElement.style.setProperty('--accent-color', themeColors.accent);
     document.documentElement.style.setProperty('--accent-bg', themeColors.accentBg);
   }, [themeColors.accent, themeColors.accentBg]);
+
+  useEffect(() => {
+    soundManager.setVolume(settings.soundVolume);
+    soundManager.setEnabled(settings.typewriterSound || settings.saveSound || settings.notificationSound || settings.ambientSound || settings.backgroundMusic);
+  }, [settings]);
+
+  useEffect(() => {
+    const handleImage = (e: any) => setFullscreenImage(e.detail);
+    const handleToast = (e: any) => {
+      setToastMessage(e.detail);
+      setTimeout(() => setToastMessage(null), 2000);
+    };
+    window.addEventListener('open-fullscreen-image', handleImage);
+    window.addEventListener('show-toast', handleToast);
+    return () => {
+      window.removeEventListener('open-fullscreen-image', handleImage);
+      window.removeEventListener('show-toast', handleToast);
+    };
+  }, []);
 
   const updateSettings = useCallback((partial: Partial<AppSettings>) => {
     setSettings(prev => { const next = { ...prev, ...partial }; saveSettingsToLS(next); return next; });
@@ -566,13 +806,23 @@ function App() {
   useEffect(() => {
     if (!window.api) return;
     window.api.onFileLoaded((data) => {
+      console.log("Renderer received file-loaded:", data);
       setTabs(prev => {
+        console.log("Current tabs in state:", prev);
         const existing = prev.find(t => t.filePath === data.filePath);
-        if (existing) { setActiveTabId(existing.id); return prev; }
+        if (existing) {
+          console.log("File already open in tab:", existing.id);
+          setTimeout(() => setActiveTabId(existing.id), 0);
+          return prev;
+        }
         const fileName = data.filePath.split(/[/\\]/).pop() || 'Untitled.md';
         const newTab: Tab = { id: Date.now().toString(), filePath: data.filePath, fileName, content: data.content, isUnsaved: false, isReadOnly: true };
-        if (prev.length === 1 && !prev[0].filePath && !prev[0].content && !prev[0].isUnsaved) { setActiveTabId(newTab.id); return [newTab]; }
-        setActiveTabId(newTab.id);
+        console.log("Adding new tab:", newTab);
+        setTimeout(() => setActiveTabId(newTab.id), 0);
+        if (prev.length === 1 && !prev[0].filePath && !prev[0].content && !prev[0].isUnsaved) {
+          console.log("Replacing Untitled tab");
+          return [newTab];
+        }
         return [...prev, newTab];
       });
     });
@@ -645,6 +895,10 @@ function App() {
       if (currentDir) {
         loadDir(currentDir);
       }
+    }
+    
+    if (settings.saveSound) {
+      soundManager.playSave();
     }
   };
 
@@ -792,7 +1046,7 @@ function App() {
             maxHeight: showTabs ? 40 : 0, opacity: showTabs ? 1 : 0, transition: tr,
             backgroundColor: dk ? '#1a1a1a' : '#e4e4e7', borderBottom: showTabs ? `1px solid ${dk ? '#2a2a2a' : '#d4d4d8'}` : 'none'
           }}>
-            <div className="flex items-center h-[37px] overflow-x-auto" onWheel={e => { e.currentTarget.scrollLeft += e.deltaY; }}>
+            <div className="flex items-center h-[37px] overflow-x-auto" onWheel={e => { e.preventDefault(); smoothScroll(e.currentTarget, e.deltaY); }}>
               {!isSidebarOpen && <SideBtn onClick={() => setIsSidebarOpen(true)} icon={<PanelLeftOpen size={15} />} dk={dk} title="Show Sidebar"
                 className="shrink-0 h-full" style={{ borderRight: `1px solid ${dk ? '#2a2a2a' : '#d4d4d8'}` }} />}
               {tabs.map(tab => (
@@ -872,6 +1126,18 @@ function App() {
                       <div className="w-px h-4 mx-0.5" style={{ backgroundColor: dk ? '#27272a' : '#ccc' }} />
                     </>
                   )}
+                  <button onClick={() => { 
+                    navigator.clipboard.writeText(activeTab.content); 
+                    soundManager.playNotification(); 
+                    setToastMessage('Copied all text to clipboard!');
+                    setTimeout(() => setToastMessage(null), 2000);
+                  }} className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-all border"
+                    style={{ borderColor: dk ? '#333' : '#ddd', color: dk ? '#aaa' : '#555', backgroundColor: 'transparent' }}
+                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = dk ? '#333' : '#eee'; }}
+                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                    title="Copy Raw Markdown">
+                    <CopyAllIcon size={12} /> Copy All
+                  </button>
                   <SideBtn onClick={() => setIsStructureOpen(p => !p)} icon={isStructureOpen ? <PanelRightClose size={18} /> : <PanelRightOpen size={18} />} dk={dk} title="Toggle Outline" />
                 </div>
               </div>
@@ -893,12 +1159,42 @@ function App() {
               <div className="absolute top-0 bottom-0 -right-2 w-4 cursor-ew-resize opacity-0 group-hover:opacity-30 hover:!opacity-100 flex items-center justify-center z-10 transition-opacity" onMouseDown={e => startEditorResize(e, 'right')}>
                 <div className="h-12 w-1 rounded-full bg-gray-400 dark:bg-gray-500 hover:bg-blue-500 dark:hover:bg-blue-400 transition-colors" />
               </div>
-              {tabs.map(tab => (
-                <EditorComponent key={tab.id} tab={tab} isActive={activeTabId === tab.id}
-                  setUnsaved={(id: string, s: boolean) => setTabs(p => p.map(t => t.id === id ? { ...t, isUnsaved: s } : t))}
-                  onEditorActive={setActiveEditor} 
-                  onEditorReady={(id: string, ed: any) => { editorsRef.current[id] = ed; }}
-                  onSelectionUpdate={() => setSelectionTick(p => p + 1)} settings={settings} />
+               {tabs.map(tab => (
+                <React.Fragment key={tab.id}>
+                  <textarea
+                    value={tab.content}
+                    onChange={e => {
+                      setTabs(ts => ts.map(t => t.id === tab.id ? { ...t, content: e.target.value, isUnsaved: true } : t));
+                    }}
+                    className="w-full h-full min-h-[calc(100vh-150px)] px-12 pt-6 pb-32 bg-transparent resize-none focus:outline-none"
+                    style={{ 
+                      display: activeTabId === tab.id && isSourceMode ? 'block' : 'none', 
+                      fontSize: settings.fontSize, 
+                      lineHeight: settings.lineHeight, 
+                      fontFamily: 'monospace',
+                      color: dk ? '#e4e4e7' : '#18181b'
+                    }}
+                    spellCheck={settings.spellCheck}
+                    readOnly={tab.isReadOnly}
+                  />
+                  <div style={{ display: activeTabId === tab.id && !isSourceMode ? 'block' : 'none' }}>
+                    <EditorComponent tab={tab} isActive={activeTabId === tab.id && !isSourceMode}
+                      setUnsaved={(id: string, s: boolean) => setTabs(p => p.map(t => t.id === id ? { ...t, isUnsaved: s } : t))}
+                      onEditorActive={setActiveEditor} 
+                      onEditorReady={(id: string, ed: any) => {
+                        editorsRef.current[id] = ed;
+                        // Reset unsaved state on startup load
+                        setTabs(p => p.map(t => t.id === id ? { ...t, isUnsaved: false } : t));
+                        // Auto-save the normalized content back to the file
+                        const currentTab = tabsRef.current.find(t => t.id === id);
+                        if (currentTab && currentTab.filePath) {
+                          const content = ed.storage.markdown.getMarkdown();
+                          window.api.saveFile({ filePath: currentTab.filePath, content });
+                        }
+                      }}
+                      onSelectionUpdate={() => setSelectionTick(p => p + 1)} settings={settings} />
+                  </div>
+                </React.Fragment>
               ))}
             </div>
           </div>
@@ -925,10 +1221,13 @@ function App() {
           }}>
             {activeEditor && (
               <div key={selectionTick} className="h-[43px] flex items-center justify-between px-4 select-none">
-                <div className="flex items-center gap-1 overflow-x-auto flex-1 py-1" onWheel={e => { e.currentTarget.scrollLeft += e.deltaY; }}>
+                <div className="flex items-center gap-1 overflow-x-auto flex-1 py-1" onWheel={e => { e.preventDefault(); smoothScroll(e.currentTarget, e.deltaY); }}>
                   <TB e={activeEditor} a="toggleBold" on={activeEditor.isActive('bold')} icon={<Bold size={13} />} t="Bold" ac={themeColors.accent} dk={dk} />
                   <TB e={activeEditor} a="toggleItalic" on={activeEditor.isActive('italic')} icon={<Italic size={13} />} t="Italic" ac={themeColors.accent} dk={dk} />
                   <TB e={activeEditor} a="toggleStrike" on={activeEditor.isActive('strike')} icon={<Strikethrough size={13} />} t="Strike" ac={themeColors.accent} dk={dk} />
+                  <TB e={activeEditor} a="toggleHighlight" on={activeEditor.isActive('highlight')} icon={<Highlighter size={13} />} t="Highlight" ac={themeColors.accent} dk={dk} />
+                  <TB e={activeEditor} a="toggleSubscript" on={activeEditor.isActive('subscript')} icon={<SubscriptIcon size={13} />} t="Subscript" ac={themeColors.accent} dk={dk} />
+                  <TB e={activeEditor} a="toggleSuperscript" on={activeEditor.isActive('superscript')} icon={<SuperscriptIcon size={13} />} t="Superscript" ac={themeColors.accent} dk={dk} />
                   <Sep dk={dk} />
                   <TB e={activeEditor} a="toggleHeading" args={{level:1}} on={activeEditor.isActive('heading',{level:1})} icon={<span className="text-[10px] font-bold">H1</span>} t="H1" ac={themeColors.accent} dk={dk} />
                   <TB e={activeEditor} a="toggleHeading" args={{level:2}} on={activeEditor.isActive('heading',{level:2})} icon={<span className="text-[10px] font-bold">H2</span>} t="H2" ac={themeColors.accent} dk={dk} />
@@ -936,10 +1235,86 @@ function App() {
                   <Sep dk={dk} />
                   <TB e={activeEditor} a="toggleBulletList" on={activeEditor.isActive('bulletList')} icon={<List size={13} />} t="Bullets" ac={themeColors.accent} dk={dk} />
                   <TB e={activeEditor} a="toggleOrderedList" on={activeEditor.isActive('orderedList')} icon={<ListOrdered size={13} />} t="Numbers" ac={themeColors.accent} dk={dk} />
+                  <TB e={activeEditor} a="toggleTaskList" on={activeEditor.isActive('taskList')} icon={<CheckSquare size={13} />} t="Tasks" ac={themeColors.accent} dk={dk} />
                   <TB e={activeEditor} a="toggleBlockquote" on={activeEditor.isActive('blockquote')} icon={<Quote size={13} />} t="Quote" ac={themeColors.accent} dk={dk} />
                   <Sep dk={dk} />
                   <TB e={activeEditor} a="toggleCode" on={activeEditor.isActive('code')} icon={<Code size={13} />} t="Code" ac={themeColors.accent} dk={dk} />
                   <TB e={activeEditor} a="toggleCodeBlock" on={activeEditor.isActive('codeBlock')} icon={<Terminal size={13} />} t="Block" ac={themeColors.accent} dk={dk} />
+                   <TB e={activeEditor} on={activeEditor.isActive('link')} icon={<Link2 size={13} />} t="Link" ac={themeColors.accent} dk={dk} onClick={() => {
+                    if (activeEditor.isActive('link')) { activeEditor.chain().focus().unsetLink().run(); return; }
+                    setActivePrompt({
+                      type: 'link',
+                      title: 'Insert Link',
+                      label1: 'URL',
+                      placeholder1: 'https://example.com',
+                      value1: '',
+                      label2: 'Link Text (Optional)',
+                      placeholder2: 'e.g. My Website',
+                      value2: activeEditor.state.selection.empty ? '' : activeEditor.state.doc.textBetween(activeEditor.state.selection.from, activeEditor.state.selection.to),
+                      submitLabel: 'Insert',
+                      onSubmit: (url, text) => {
+                        if (!url) return;
+                        if (text && activeEditor.state.selection.empty) {
+                          activeEditor.chain().focus().insertContent({
+                            type: 'text',
+                            text: text,
+                            marks: [{ type: 'link', attrs: { href: url } }]
+                          }).run();
+                        } else {
+                          activeEditor.chain().focus().setLink({ href: url }).run();
+                        }
+                      }
+                    });
+                  }} />
+                  <TB e={activeEditor} icon={<ImageIcon size={13} />} t="Image" ac={themeColors.accent} dk={dk} onClick={() => {
+                    setActivePrompt({
+                      type: 'image',
+                      title: 'Insert Image',
+                      label1: 'Image URL',
+                      placeholder1: 'https://example.com/image.png',
+                      value1: '',
+                      label2: 'Alt Text (Optional)',
+                      placeholder2: 'e.g. Image Description',
+                      value2: '',
+                      submitLabel: 'Insert',
+                      onSubmit: (url, alt) => {
+                        if (url) {
+                          activeEditor.chain().focus().setImage({ src: url, alt }).run();
+                        }
+                      }
+                    });
+                  }} />
+                  <Sep dk={dk} />
+                  <TB e={activeEditor} icon={<Asterisk size={13} />} t="Footnote" ac={themeColors.accent} dk={dk} onClick={() => {
+                    setActivePrompt({
+                      type: 'footnote',
+                      title: 'Insert Footnote',
+                      label1: 'Footnote ID',
+                      placeholder1: 'e.g. 1 or mynote',
+                      value1: String(headings.length + 1),
+                      label2: 'Footnote Description',
+                      placeholder2: 'This is the footnote content.',
+                      value2: '',
+                      submitLabel: 'Insert',
+                      onSubmit: (id, desc) => {
+                        if (!id) return;
+                        activeEditor.chain().focus().insertContent([
+                          { type: 'footnoteReference', attrs: { id } },
+                          { type: 'paragraph' },
+                          { type: 'footnote', attrs: { id }, content: desc ? [{ type: 'paragraph', content: [{ type: 'text', text: desc }] }] : [{ type: 'paragraph' }] }
+                        ]).run();
+                      }
+                    });
+                  }} />
+                  <TB e={activeEditor} icon={<ListMinus size={13} />} t="Definition List" ac={themeColors.accent} dk={dk} onClick={() => {
+                    activeEditor.chain().focus().insertContent({
+                      type: 'defList',
+                      content: [
+                        { type: 'defTerm', content: [{ type: 'text', text: 'Term' }] },
+                        { type: 'defDescription', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Definition' }] }] }
+                      ]
+                    }).run();
+                  }} />
                   <Sep dk={dk} />
                   <TB e={activeEditor} a="setTextAlign" args="left" on={activeEditor.isActive({textAlign:'left'})} icon={<AlignLeft size={13} />} t="Align Left" ac={themeColors.accent} dk={dk} />
                   <TB e={activeEditor} a="setTextAlign" args="center" on={activeEditor.isActive({textAlign:'center'})} icon={<AlignCenter size={13} />} t="Align Center" ac={themeColors.accent} dk={dk} />
@@ -1028,13 +1403,23 @@ function App() {
               ) : (
                 headings.map((h, i) => (
                   <div key={i} className="text-[11px] py-1.5 pr-2 rounded-md cursor-pointer transition-colors hover:bg-black/5 dark:hover:bg-white/5 truncate"
+                    onMouseEnter={() => setHoveredHeadingIndex(i)}
+                    onMouseLeave={() => setHoveredHeadingIndex(null)}
                     style={{ 
                       paddingLeft: `${(h.level - 1) * 12 + 8}px`, 
-                      color: dk ? '#ffffff' : '#000000',
-                      opacity: Math.max(1 - (h.level - 1) * 0.25, 0.3)
+                      color: hoveredHeadingIndex === i ? themeColors.accent : (dk ? '#ffffff' : '#000000'),
+                      opacity: hoveredHeadingIndex === i ? 1 : Math.max(1 - (h.level - 1) * 0.25, 0.3)
                     }}
                     onClick={() => {
-                       activeEditor?.chain().focus().setTextSelection(h.pos).scrollIntoView().run();
+                      if (activeEditor) {
+                        const domNode = activeEditor.view.nodeDOM(h.pos);
+                        if (domNode instanceof HTMLElement) {
+                          domNode.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          activeEditor.chain().setTextSelection(h.pos).run();
+                        } else {
+                          activeEditor.chain().focus().setTextSelection(h.pos).scrollIntoView().run();
+                        }
+                      }
                     }}>
                     {h.text}
                   </div>
@@ -1051,6 +1436,7 @@ function App() {
           <FAB onClick={toggleReadOnly} icon={<Pencil size={17} />} title="Switch to Edit Mode" on accent={themeColors.accent} bg={themeColors.accentBg} dk={dk} anim={settings.animationsEnabled} />
         ) : (
           <>
+            <FAB onClick={() => setIsSourceMode(p => !p)} icon={isSourceMode ? <Code size={17} /> : <FileText size={17} />} title="Source Mode" on={isSourceMode} accent={themeColors.accent} bg={themeColors.accentBg} dk={dk} anim={settings.animationsEnabled} />
             <FAB onClick={toggleReadOnly} icon={<BookOpen size={17} />} title="Reading Mode" on={false} accent={themeColors.accent} bg={themeColors.accentBg} dk={dk} anim={settings.animationsEnabled} />
             <FAB onClick={() => setIsMinimalistMode(p => !p)} icon={isMinimalistMode ? <Eye size={17} /> : <EyeOff size={17} />} title="Minimalist" on={isMinimalistMode} accent={themeColors.accent} bg={themeColors.accentBg} dk={dk} anim={settings.animationsEnabled} />
           </>
@@ -1087,6 +1473,77 @@ function App() {
           </div>
         </div>
       )}
+      {activePrompt && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white dark:bg-[#1e1e1e] w-full max-w-md rounded-xl flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden shadow-2xl animate-fade-in"
+            style={{ animation: settings.animationsEnabled ? 'settingsAppear 0.2s cubic-bezier(0.16,1,0.3,1)' : 'none' }}>
+            <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616]">
+              <div className="p-1.5 rounded-full flex items-center justify-center" style={{ backgroundColor: themeColors.accentBg, color: themeColors.accent }}>
+                {activePrompt.type === 'link' ? <Link2 size={16} /> : activePrompt.type === 'image' ? <ImageIcon size={16} /> : <Asterisk size={16} />}
+              </div>
+              <h2 className="text-sm font-semibold">{activePrompt.title}</h2>
+            </div>
+            
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const val1 = formData.get('field1') as string || '';
+              const val2 = formData.get('field2') as string || '';
+              activePrompt.onSubmit(val1, val2);
+              setActivePrompt(null);
+            }}>
+              <div className="px-5 py-6 flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-gray-500 dark:text-gray-400">{activePrompt.label1}</label>
+                  <input
+                    name="field1"
+                    type="text"
+                    defaultValue={activePrompt.value1}
+                    placeholder={activePrompt.placeholder1}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-transparent text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-[#1e1e1e]"
+                    style={{ '--tw-ring-color': themeColors.accent } as any}
+                    required
+                    autoFocus
+                  />
+                </div>
+                
+                {activePrompt.label2 && (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-gray-500 dark:text-gray-400">{activePrompt.label2}</label>
+                    <input
+                      name="field2"
+                      type="text"
+                      defaultValue={activePrompt.value2}
+                      placeholder={activePrompt.placeholder2}
+                      className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-700 bg-transparent text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-[#1e1e1e]"
+                      style={{ '--tw-ring-color': themeColors.accent } as any}
+                    />
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616]">
+                <button type="button" onClick={() => setActivePrompt(null)} className="px-4 py-1.5 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" className="px-4 py-1.5 text-sm font-medium rounded-lg text-white shadow-sm transition-all"
+                  style={{ backgroundColor: themeColors.accent }}>
+                  {activePrompt.submitLabel}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      
+      {fullscreenImage && (
+        <FullscreenImageViewer src={fullscreenImage} onClose={() => setFullscreenImage(null)} />
+      )}
+      {toastMessage && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[400] px-4 py-2 rounded-full shadow-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-black text-sm font-medium animate-fade-in pointer-events-none">
+          {toastMessage}
+        </div>
+      )}
     </div>
   );
 }
@@ -1115,8 +1572,8 @@ const DirItem = ({ name, icon, onClick, dk, disabled }: any) => (
   </div>
 );
 
-const TB = ({ e, a, args, on, icon, t, ac, dk, dis }: any) => (
-  <button onClick={() => { if (dis) return; const c = e.chain().focus(); args ? c[a](args).run() : c[a]().run(); }} disabled={dis}
+const TB = ({ e, a, args, on, icon, t, ac, dk, dis, onClick }: any) => (
+  <button onClick={onClick || (() => { if (dis) return; const c = e.chain().focus(); args ? c[a](args).run() : c[a]().run(); })} disabled={dis}
     className="p-1.5 rounded-md transition-colors flex items-center justify-center min-w-[28px]"
     style={{ backgroundColor: on ? (dk ? '#2a2a2a' : '#fff') : 'transparent', color: on ? ac : (dk ? '#888' : '#52525b'), opacity: dis ? 0.3 : 1, boxShadow: on ? '0 1px 2px rgba(0,0,0,0.08)' : 'none' }}
     onMouseEnter={e => { if (!on && !dis) (e.currentTarget as HTMLElement).style.backgroundColor = dk ? '#2a2a2a' : '#d8d8d8'; }}

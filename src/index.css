@@ -69,6 +69,33 @@
 .ProseMirror pre code, .dark .ProseMirror pre code { @apply bg-transparent p-0 border-none; background: transparent !important; color: inherit; font-size: inherit; }
 .ProseMirror hr { @apply my-8 border-gray-200 dark:border-gray-800; }
 
+.ProseMirror a {
+  color: var(--accent-color);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, var(--accent-color) 40%, transparent);
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+.ProseMirror a:hover {
+  text-decoration-color: var(--accent-color);
+  background-color: var(--accent-bg);
+  border-radius: 4px;
+  padding: 0 4px;
+  margin: 0 -4px;
+}
+
+.ProseMirror img {
+  @apply rounded-lg max-w-full my-4 border border-gray-200 dark:border-gray-800 shadow-sm transition-all;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+.ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
 /* Tables */
 .ProseMirror table {
   @apply w-full mb-6 table-auto border-separate border-spacing-0 overflow-hidden rounded-lg max-w-full;
@@ -197,4 +224,122 @@ input[type="range"]::-webkit-slider-thumb:active { transform: scale(1.05); }
 }
 .dark .search-result-active {
   background-color: rgba(255, 165, 0, 0.45);
+}
+
+/* Task Lists */
+ul[data-type="taskList"], ul.contains-task-list { list-style: none; padding-left: 0; margin-bottom: 1.25em; }
+ul[data-type="taskList"] li, li.task-list-item { display: flex; align-items: flex-start; margin-bottom: 0.5em; }
+ul[data-type="taskList"] li > label, li.task-list-item > input[type="checkbox"] { margin-right: 0.5rem; user-select: none; margin-top: 0.3rem; cursor: pointer; }
+ul[data-type="taskList"] li > div, li.task-list-item > div { flex: 1; }
+
+/* Custom Checkbox */
+input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  width: 16px; height: 16px; border-radius: 4px;
+  border: 2px solid var(--text-muted);
+  background-color: transparent; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: all 0.2s ease;
+}
+input[type="checkbox"]:hover { border-color: var(--accent-color); }
+input[type="checkbox"]:checked {
+  background-color: var(--accent-color);
+  border-color: var(--accent-color);
+}
+input[type="checkbox"]:checked::after {
+  content: ''; width: 4px; height: 8px;
+  border-right: 2px solid white; border-bottom: 2px solid white;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+/* Highlight */
+mark { background-color: color-mix(in srgb, var(--accent-color) 40%, transparent); color: inherit; padding: 0.1em 0.2em; border-radius: 2px; }
+
+/* Footnotes */
+.footnote-ref { 
+  color: var(--accent-color); 
+  cursor: pointer; 
+  text-decoration: none !important; 
+  font-weight: 600;
+  transition: all 0.15s ease;
+}
+.footnote-ref:hover { 
+  filter: brightness(1.2); 
+}
+.footnote-ref a { text-decoration: none; color: inherit; pointer-events: none; }
+.footnote-ref-number { font-size: 0.85em; }
+
+/* Footnotes section divider */
+.footnotes-section {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid var(--panel-border);
+  position: relative;
+}
+.footnotes-section::before {
+  content: 'Footnotes';
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+.footnote-item { 
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  font-size: 0.88em; 
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.25rem;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.footnote-item:hover { 
+  background-color: color-mix(in srgb, var(--accent-color) 8%, transparent);
+}
+.footnote-label {
+  color: var(--accent-color);
+  font-weight: 700;
+  font-size: 0.9em;
+  white-space: nowrap;
+  min-width: 1.5em;
+  flex-shrink: 0;
+}
+.footnote-content {
+  flex: 1;
+  min-width: 0;
+}
+.footnote-content p { margin: 0 !important; }
+.footnote-content .footnote-backref { display: none; }
+
+/* Definition Lists */
+dl.deflist { margin-bottom: 1em; }
+dl.deflist dt { font-weight: 600; margin-top: 1em; }
+dl.deflist dd { margin-left: 1.5em; color: var(--text-muted); }
+
+/* Interactions */
+.ProseMirror a, .ProseMirror img { cursor: pointer; }
+.ProseMirror table td, .ProseMirror table th {
+  transition: background-color 0.1s ease;
+}
+.ProseMirror table td:hover, .ProseMirror table th:hover {
+  background-color: color-mix(in srgb, var(--accent-color) 6%, transparent) !important;
+}
+.ProseMirror table .selectedCell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--selection-bg);
+  pointer-events: none;
+  z-index: 1;
+}
+.selected-table-cell {
+  background-color: var(--selection-bg) !important;
+  outline: 2px solid var(--accent-color);
+  outline-offset: -2px;
 }
