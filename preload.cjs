@@ -21,5 +21,6 @@ contextBridge.exposeInMainWorld('api', {
   checkWindowsIntegration: () => ipcRenderer.invoke('check-windows-integration'),
   setupWindowsIntegration: (options) => ipcRenderer.invoke('setup-windows-integration', options),
   onDirectoryLoaded: (callback) => ipcRenderer.on('open-directory', (_event, dirPath) => callback(dirPath)),
+  cancelAppClose: () => ipcRenderer.send('cancel-app-close'),
 });
 

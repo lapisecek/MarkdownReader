@@ -78,6 +78,7 @@ declare global {
         contextMenu?: boolean;
       }) => Promise<{ success: boolean; results: any; error?: string }>;
       onDirectoryLoaded: (callback: (dirPath: string) => void) => void;
+      cancelAppClose: () => void;
     }
   }
 }
@@ -744,6 +745,7 @@ function App() {
 
   const handleCloseCancel = () => {
     setShowCloseDialog(false);
+    window.api.cancelAppClose();
   };
 
   /**

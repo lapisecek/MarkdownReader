@@ -2,15 +2,25 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
+// High-performance launch switches: bypass WPAD network/proxy stalls and background delays
+app.commandLine.appendSwitch('no-proxy-server');
+app.commandLine.appendSwitch('disable-background-networking');
+app.commandLine.appendSwitch('disable-component-update');
+app.commandLine.appendSwitch('disable-domain-reliability');
+app.commandLine.appendSwitch('disable-sync');
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion,SpareRendererForSitePerProcess');
+
+const isDev = !app.isPackaged;
+
 function logToFile(msg) {
+  if (!isDev) return;
   try {
-    fs.appendFileSync(path.join(__dirname, 'electron_output.txt'), `${new Date().toISOString()} - ${msg}\n`, 'utf-8');
+    fs.appendFileSync(path.join(app.getPath('userData'), 'electron_output.txt'), `${new Date().toISOString()} - ${msg}\n`, 'utf-8');
   } catch (e) {}
 }
 
-let mainWindow;
+let mainWindow = null;
 let currentFilePath = null;
-const isDev = !app.isPackaged;
 
 logToFile(`App starting. argv: ${JSON.stringify(process.argv)}, cwd: ${process.cwd()}`);
 
@@ -19,26 +29,30 @@ let directoryToOpen = null;
 let isRendererReady = false;
 
 // Handle Windows file association argument
-if (process.defaultApp) {
-  if (process.argv.length >= 2) {
+try {
+  if (process.defaultApp && process.argv.length >= 2) {
     app.setAsDefaultProtocolClient('markdownreader', process.execPath, [path.resolve(process.argv[1])]);
+  } else {
+    app.setAsDefaultProtocolClient('markdownreader');
   }
-} else {
-  app.setAsDefaultProtocolClient('markdownreader');
-}
+} catch (e) {}
 
 const gotTheLock = app.requestSingleInstanceLock();
 logToFile(`gotTheLock: ${gotTheLock}`);
 
 if (!gotTheLock) {
-  app.quit();
+  // Exit duplicate process immediately with zero teardown delay
+  app.exit(0);
 } else {
   app.on('second-instance', (event, commandLine, workingDirectory) => {
     logToFile(`second-instance event. commandLine: ${JSON.stringify(commandLine)}, workingDirectory: ${workingDirectory}`);
-    // Someone tried to run a second instance, we should focus our window.
+    // Bring window to foreground immediately
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
+      if (!mainWindow.isVisible()) mainWindow.show();
       mainWindow.focus();
+      mainWindow.setAlwaysOnTop(true);
+      mainWindow.setAlwaysOnTop(false);
       handleFileOpenArg(commandLine, workingDirectory);
     }
   });
@@ -117,19 +131,21 @@ function createWindow() {
     minWidth: 400,
     minHeight: 300,
     frame: false,
-    show: false,
+    show: true, // Show instantly on startup with dark background
     backgroundColor: '#151515',
     icon: path.join(__dirname, 'icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      spellcheck: false // Disable slow Windows dictionary lookup
     },
   });
 
-
   mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
+    if (mainWindow && !mainWindow.isVisible()) {
+      mainWindow.show();
+    }
   });
 
   mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
@@ -150,41 +166,63 @@ function createWindow() {
     }
   });
 
-  if (isDev) {
-    mainWindow.loadURL('http://localhost:5173');
+  const devServerUrl = process.env.VITE_DEV_SERVER_URL;
+  if (isDev && devServerUrl) {
+    mainWindow.loadURL(devServerUrl);
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
   }
 
   let isSafeToClose = false;
+  let closeTimeout = null;
+
   mainWindow.on('close', (e) => {
     if (!isSafeToClose) {
       e.preventDefault();
       mainWindow.webContents.send('app-close-request');
-      // Removed the 3 second force-close timeout to ensure the user can cancel the close.
+      if (closeTimeout) clearTimeout(closeTimeout);
+      // Failsafe: if renderer takes > 800ms, force close cleanly so app never hangs in background
+      closeTimeout = setTimeout(() => {
+        isSafeToClose = true;
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.destroy();
+        }
+      }, 800);
     }
   });
 
   ipcMain.on('close-window-confirmed', () => {
+    if (closeTimeout) clearTimeout(closeTimeout);
     isSafeToClose = true;
-    mainWindow.close();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.destroy();
+    }
+  });
+
+  ipcMain.on('cancel-app-close', () => {
+    if (closeTimeout) clearTimeout(closeTimeout);
+    isSafeToClose = false;
   });
 
   ipcMain.on('minimize-window', () => {
-    if (mainWindow) mainWindow.minimize();
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize();
   });
 
   mainWindow.on('maximize', () => {
-    mainWindow.webContents.send('window-state-change', { isMaximized: true });
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('window-state-change', { isMaximized: true });
+    }
   });
 
   mainWindow.on('unmaximize', () => {
-    mainWindow.webContents.send('window-state-change', { isMaximized: false });
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('window-state-change', { isMaximized: false });
+    }
   });
 
   ipcMain.on('maximize-window', () => {
-    if (mainWindow) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
       if (mainWindow.isMaximized()) {
         mainWindow.unmaximize();
       } else {
@@ -194,7 +232,11 @@ function createWindow() {
   });
 
   ipcMain.on('close-window', () => {
-    if (mainWindow) mainWindow.close();
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close();
+  });
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
   });
 
   mainWindow.webContents.on('did-finish-load', () => {
@@ -203,8 +245,14 @@ function createWindow() {
   });
 }
 
+app.on('before-quit', () => {
+  isSafeToClose = true;
+});
+
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
+  if (process.platform !== 'darwin') {
+    app.exit(0); // Exit process immediately, releasing all Windows OS handles
+  }
 });
 
 ipcMain.on('renderer-ready', () => {
@@ -362,10 +410,14 @@ ipcMain.handle('save-asset-image', async (event, { base64Data, activeFilePath, f
 function runReg(args) {
   return new Promise((resolve) => {
     const { execFile } = require('child_process');
-    execFile('reg.exe', args, (error, stdout, stderr) => {
-      if (error) resolve({ success: false, error: error.message, stderr, code: error.code });
-      else resolve({ success: true, stdout: stdout || '' });
-    });
+    try {
+      execFile('reg.exe', args, { timeout: 2000, windowsHide: true }, (error, stdout, stderr) => {
+        if (error) resolve({ success: false, error: error.message, stderr, code: error.code });
+        else resolve({ success: true, stdout: stdout || '' });
+      });
+    } catch (e) {
+      resolve({ success: false, error: e.message });
+    }
   });
 }
 

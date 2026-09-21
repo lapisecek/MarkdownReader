@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "electron:dev": "concurrently \"vite\" \"wait-on tcp:5173 && electron .\"",
-    "electron:build": "vite build && electron-packager . MarkdownReader --platform=win32 --arch=x64 --out=dist-electron --icon=icon.ico --overwrite --ignore=\"^/node_modules|^/src|^/public\" && (robocopy dist-electron\\MarkdownReader-win32-x64 dist-electron\\win-unpacked /mir /np /ndl /nfl /njh /njs || exit 0)"
+    "electron:build": "vite build && electron-packager . MarkdownReader --platform=win32 --arch=x64 --out=dist-electron --icon=icon.ico --overwrite --asar --ignore=\"^/node_modules|^/src|^/public|^/dist-electron|^/scratch|^/tempAssets|^/temp_test|^/tests|^/\\.git|^/\\.agents\" && (robocopy dist-electron\\MarkdownReader-win32-x64 dist-electron\\win-unpacked /mir /np /ndl /nfl /njh /njs || exit 0)"
   },
   "build": {
     "appId": "com.adamk.markdownreader",
