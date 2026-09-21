@@ -2,8 +2,10 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
-// High-performance launch switches: bypass WPAD network/proxy stalls and background delays
+// High-performance launch switches: bypass WPAD network/proxy stalls, sandbox conflicts, and background delays
 app.commandLine.appendSwitch('no-proxy-server');
+app.commandLine.appendSwitch('no-sandbox');
+app.commandLine.appendSwitch('disable-gpu-sandbox');
 app.commandLine.appendSwitch('disable-background-networking');
 app.commandLine.appendSwitch('disable-component-update');
 app.commandLine.appendSwitch('disable-domain-reliability');
@@ -133,7 +135,7 @@ function createWindow() {
     frame: false,
     show: true, // Show instantly on startup with dark background
     backgroundColor: '#151515',
-    icon: path.join(__dirname, 'icon.ico'),
+    icon: getAppIconPath(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -468,6 +470,15 @@ ipcMain.handle('check-windows-integration', async () => {
   }
 });
 
+function getAppIconPath() {
+  const exeDir = path.dirname(process.execPath);
+  const localIco = path.join(exeDir, 'icon.ico');
+  if (fs.existsSync(localIco)) return localIco;
+  const asarIco = path.join(__dirname, 'icon.ico');
+  if (fs.existsSync(asarIco)) return asarIco;
+  return localIco;
+}
+
 ipcMain.handle('setup-windows-integration', async (_event, options = {}) => {
   if (process.platform !== 'win32') return { success: false, error: 'Only supported on Windows' };
 
@@ -487,6 +498,7 @@ ipcMain.handle('setup-windows-integration', async (_event, options = {}) => {
 
   const exePath = process.execPath;
   const exeDir = path.dirname(exePath);
+  const icoPath = getAppIconPath();
 
   // 1. Setup default app file associations
   if (defaultApp) {
@@ -496,7 +508,7 @@ ipcMain.handle('setup-windows-integration', async (_event, options = {}) => {
       await runReg(['add', 'HKCU\\Software\\Classes\\.markdown', '/ve', '/d', 'MarkdownReader.Document', '/f']);
       await runReg(['add', 'HKCU\\Software\\Classes\\.markdown\\OpenWithProgids', '/v', 'MarkdownReader.Document', '/d', '', '/f']);
       await runReg(['add', 'HKCU\\Software\\Classes\\MarkdownReader.Document', '/ve', '/d', 'Markdown File', '/f']);
-      await runReg(['add', 'HKCU\\Software\\Classes\\MarkdownReader.Document\\DefaultIcon', '/ve', '/d', `"${exePath}",0`, '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\MarkdownReader.Document\\DefaultIcon', '/ve', '/d', `"${icoPath}",0`, '/f']);
       await runReg(['add', 'HKCU\\Software\\Classes\\MarkdownReader.Document\\shell\\open\\command', '/ve', '/d', `"${exePath}" "%1"`, '/f']);
       await runReg(['add', 'HKCU\\Software\\Classes\\Applications\\MarkdownReader.exe\\shell\\open\\command', '/ve', '/d', `"${exePath}" "%1"`, '/f']);
       results.defaultApp = true;
@@ -513,7 +525,7 @@ ipcMain.handle('setup-windows-integration', async (_event, options = {}) => {
       shell.writeShortcutLink(desktopPath, op, {
         target: exePath,
         cwd: exeDir,
-        icon: exePath,
+        icon: icoPath,
         iconIndex: 0,
         description: 'MarkdownReader - Fast Markdown Workspace'
       });
@@ -535,7 +547,7 @@ ipcMain.handle('setup-windows-integration', async (_event, options = {}) => {
       shell.writeShortcutLink(startMenuPath, op, {
         target: exePath,
         cwd: exeDir,
-        icon: exePath,
+        icon: icoPath,
         iconIndex: 0,
         description: 'MarkdownReader - Fast Markdown Workspace'
       });
@@ -550,20 +562,20 @@ ipcMain.handle('setup-windows-integration', async (_event, options = {}) => {
     try {
       // File context menu for .md and .markdown
       await runReg(['add', 'HKCU\\Software\\Classes\\SystemFileAssociations\\.md\\shell\\MarkdownReader', '/ve', '/d', 'Edit with MarkdownReader', '/f']);
-      await runReg(['add', 'HKCU\\Software\\Classes\\SystemFileAssociations\\.md\\shell\\MarkdownReader', '/v', 'Icon', '/d', `"${exePath}",0`, '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\SystemFileAssociations\\.md\\shell\\MarkdownReader', '/v', 'Icon', '/d', `"${icoPath}",0`, '/f']);
       await runReg(['add', 'HKCU\\Software\\Classes\\SystemFileAssociations\\.md\\shell\\MarkdownReader\\command', '/ve', '/d', `"${exePath}" "%1"`, '/f']);
 
       await runReg(['add', 'HKCU\\Software\\Classes\\SystemFileAssociations\\.markdown\\shell\\MarkdownReader', '/ve', '/d', 'Edit with MarkdownReader', '/f']);
-      await runReg(['add', 'HKCU\\Software\\Classes\\SystemFileAssociations\\.markdown\\shell\\MarkdownReader', '/v', 'Icon', '/d', `"${exePath}",0`, '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\SystemFileAssociations\\.markdown\\shell\\MarkdownReader', '/v', 'Icon', '/d', `"${icoPath}",0`, '/f']);
       await runReg(['add', 'HKCU\\Software\\Classes\\SystemFileAssociations\\.markdown\\shell\\MarkdownReader\\command', '/ve', '/d', `"${exePath}" "%1"`, '/f']);
 
       // Folder / Directory context menu
       await runReg(['add', 'HKCU\\Software\\Classes\\Directory\\shell\\MarkdownReader', '/ve', '/d', 'Open Folder in MarkdownReader', '/f']);
-      await runReg(['add', 'HKCU\\Software\\Classes\\Directory\\shell\\MarkdownReader', '/v', 'Icon', '/d', `"${exePath}",0`, '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\Directory\\shell\\MarkdownReader', '/v', 'Icon', '/d', `"${icoPath}",0`, '/f']);
       await runReg(['add', 'HKCU\\Software\\Classes\\Directory\\shell\\MarkdownReader\\command', '/ve', '/d', `"${exePath}" "%V"`, '/f']);
 
       await runReg(['add', 'HKCU\\Software\\Classes\\Directory\\Background\\shell\\MarkdownReader', '/ve', '/d', 'Open Folder in MarkdownReader', '/f']);
-      await runReg(['add', 'HKCU\\Software\\Classes\\Directory\\Background\\shell\\MarkdownReader', '/v', 'Icon', '/d', `"${exePath}",0`, '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\Directory\\Background\\shell\\MarkdownReader', '/v', 'Icon', '/d', `"${icoPath}",0`, '/f']);
       await runReg(['add', 'HKCU\\Software\\Classes\\Directory\\Background\\shell\\MarkdownReader\\command', '/ve', '/d', `"${exePath}" "%V"`, '/f']);
 
       results.contextMenu = true;
@@ -577,13 +589,14 @@ ipcMain.handle('setup-windows-integration', async (_event, options = {}) => {
 
 ipcMain.handle('set-as-default', async () => {
   const exePath = process.execPath;
+  const icoPath = getAppIconPath();
   try {
     await runReg(['add', 'HKCU\\Software\\Classes\\.md', '/ve', '/d', 'MarkdownReader.Document', '/f']);
     await runReg(['add', 'HKCU\\Software\\Classes\\.md\\OpenWithProgids', '/v', 'MarkdownReader.Document', '/d', '', '/f']);
     await runReg(['add', 'HKCU\\Software\\Classes\\.markdown', '/ve', '/d', 'MarkdownReader.Document', '/f']);
     await runReg(['add', 'HKCU\\Software\\Classes\\.markdown\\OpenWithProgids', '/v', 'MarkdownReader.Document', '/d', '', '/f']);
     await runReg(['add', 'HKCU\\Software\\Classes\\MarkdownReader.Document', '/ve', '/d', 'Markdown File', '/f']);
-    await runReg(['add', 'HKCU\\Software\\Classes\\MarkdownReader.Document\\DefaultIcon', '/ve', '/d', `"${exePath}",0`, '/f']);
+    await runReg(['add', 'HKCU\\Software\\Classes\\MarkdownReader.Document\\DefaultIcon', '/ve', '/d', `"${icoPath}",0`, '/f']);
     await runReg(['add', 'HKCU\\Software\\Classes\\MarkdownReader.Document\\shell\\open\\command', '/ve', '/d', `"${exePath}" "%1"`, '/f']);
     await runReg(['add', 'HKCU\\Software\\Classes\\Applications\\MarkdownReader.exe\\shell\\open\\command', '/ve', '/d', `"${exePath}" "%1"`, '/f']);
     return { success: true };
