@@ -1,10 +1,23 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
+let fileLoadedHandler = null;
+let appCloseRequestHandler = null;
+let windowStateChangeHandler = null;
+let directoryLoadedHandler = null;
+
 contextBridge.exposeInMainWorld('api', {
-  onFileLoaded: (callback) => ipcRenderer.on('file-loaded', (_event, data) => callback(data)),
+  onFileLoaded: (callback) => {
+    if (fileLoadedHandler) ipcRenderer.removeListener('file-loaded', fileLoadedHandler);
+    fileLoadedHandler = (_event, data) => callback(data);
+    ipcRenderer.on('file-loaded', fileLoadedHandler);
+  },
   saveFile: (data) => ipcRenderer.invoke('save-file', data),
   saveAsFile: (data) => ipcRenderer.invoke('save-as-file', data),
-  onAppCloseRequest: (callback) => ipcRenderer.on('app-close-request', () => callback()),
+  onAppCloseRequest: (callback) => {
+    if (appCloseRequestHandler) ipcRenderer.removeListener('app-close-request', appCloseRequestHandler);
+    appCloseRequestHandler = () => callback();
+    ipcRenderer.on('app-close-request', appCloseRequestHandler);
+  },
   closeWindowConfirmed: () => ipcRenderer.send('close-window-confirmed'),
   showUnsavedDialog: () => ipcRenderer.invoke('show-unsaved-dialog'),
   selectDirectory: () => ipcRenderer.invoke('select-directory'),
@@ -17,10 +30,17 @@ contextBridge.exposeInMainWorld('api', {
   setAsDefault: () => ipcRenderer.invoke('set-as-default'),
   exportToPDF: (options) => ipcRenderer.invoke('export-to-pdf', options),
   saveAssetImage: (data) => ipcRenderer.invoke('save-asset-image', data),
-  onWindowStateChange: (callback) => ipcRenderer.on('window-state-change', (_event, state) => callback(state)),
+  onWindowStateChange: (callback) => {
+    if (windowStateChangeHandler) ipcRenderer.removeListener('window-state-change', windowStateChangeHandler);
+    windowStateChangeHandler = (_event, state) => callback(state);
+    ipcRenderer.on('window-state-change', windowStateChangeHandler);
+  },
   checkWindowsIntegration: () => ipcRenderer.invoke('check-windows-integration'),
   setupWindowsIntegration: (options) => ipcRenderer.invoke('setup-windows-integration', options),
-  onDirectoryLoaded: (callback) => ipcRenderer.on('open-directory', (_event, dirPath) => callback(dirPath)),
+  onDirectoryLoaded: (callback) => {
+    if (directoryLoadedHandler) ipcRenderer.removeListener('open-directory', directoryLoadedHandler);
+    directoryLoadedHandler = (_event, dirPath) => callback(dirPath);
+    ipcRenderer.on('open-directory', directoryLoadedHandler);
+  },
   cancelAppClose: () => ipcRenderer.send('cancel-app-close'),
 });
-

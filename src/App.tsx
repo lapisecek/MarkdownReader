@@ -147,7 +147,7 @@ const getParentDirectory = (dirPath: string) => {
 const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorReady, onSelectionUpdate, settings }: any) => {
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ codeBlock: false, heading: false }),
+      StarterKit.configure({ codeBlock: false, heading: false, link: false }),
       CustomHeading,
       Markdown,
       CodeBlockLowlight.configure({ lowlight, defaultLanguage: null }),
@@ -353,9 +353,16 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
   }, [tab.content, editor]);
 
   useEffect(() => { 
-    if (isActive && editor) onEditorActive(editor);
-    if (editor && onEditorReady) onEditorReady(tab.id, editor);
-  }, [isActive, editor, onEditorActive, onEditorReady, tab.id]);
+    if (isActive && editor && onEditorActive) onEditorActive(editor);
+  }, [isActive, editor, onEditorActive]);
+
+  const lastReadyEditorRef = useRef<any>(null);
+  useEffect(() => {
+    if (editor && lastReadyEditorRef.current !== editor) {
+      lastReadyEditorRef.current = editor;
+      if (onEditorReady) onEditorReady(tab.id, editor);
+    }
+  }, [editor, tab.id, onEditorReady]);
 
   useEffect(() => {
     if (editor?.view?.dom) {
@@ -471,6 +478,29 @@ function App() {
   const isResizing = useRef(false);
   const tabsRef = useRef(tabs);
   tabsRef.current = tabs;
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
+
+  const handleEditorReady = useCallback((id: string, ed: any) => {
+    editorsRef.current[id] = ed;
+    setTabs(p => {
+      const target = p.find(t => t.id === id);
+      if (!target || !target.isUnsaved) return p;
+      return p.map(t => t.id === id ? { ...t, isUnsaved: false } : t);
+    });
+  }, []);
+
+  const handleSetUnsaved = useCallback((id: string, s: boolean) => {
+    setTabs(p => {
+      const target = p.find(t => t.id === id);
+      if (!target || target.isUnsaved === s) return p;
+      return p.map(t => t.id === id ? { ...t, isUnsaved: s } : t);
+    });
+  }, []);
+
+  const handleSelectionUpdate = useCallback(() => {
+    setSelectionTick(p => p + 1);
+  }, []);
 
   const [isInitializing, setIsInitializing] = useState(true);
   useEffect(() => {
@@ -696,7 +726,7 @@ function App() {
           return prev;
         }
         const fileName = data.filePath.split(/[/\\]/).pop() || 'Untitled.md';
-        const newTab: Tab = { id: Date.now().toString(), filePath: data.filePath, fileName, content: data.content, isUnsaved: false, isReadOnly: settings.defaultMode === 'read' };
+        const newTab: Tab = { id: Date.now().toString(), filePath: data.filePath, fileName, content: data.content, isUnsaved: false, isReadOnly: settingsRef.current.defaultMode === 'read' };
         console.log("Adding new tab:", newTab);
         setTimeout(() => setActiveTabId(newTab.id), 0);
         if (prev.length === 1 && !prev[0].filePath && !prev[0].content && !prev[0].isUnsaved) {
@@ -721,7 +751,7 @@ function App() {
       setIsSidebarOpen(true);
     });
     window.api.rendererReady();
-  }, [settings.defaultMode]);
+  }, []);
 
 
   const handleCloseSaveAll = async () => {
@@ -830,6 +860,7 @@ function App() {
 
   const closeTab = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    delete editorsRef.current[id];
     let nt = tabs.filter(t => t.id !== id);
     if (!nt.length) nt = [{ id: Date.now().toString(), filePath: null, fileName: 'Untitled.md', content: '', isUnsaved: false, isReadOnly: false }];
     setTabs(nt);
@@ -1080,20 +1111,11 @@ function App() {
                   />
                   <div style={{ display: activeTabId === tab.id && !isSourceMode ? 'block' : 'none' }}>
                     <EditorComponent tab={tab} isActive={activeTabId === tab.id && !isSourceMode}
-                      setUnsaved={(id: string, s: boolean) => setTabs(p => p.map(t => t.id === id ? { ...t, isUnsaved: s } : t))}
+                      setUnsaved={handleSetUnsaved}
                       onEditorActive={setActiveEditor} 
-                      onEditorReady={(id: string, ed: any) => {
-                        editorsRef.current[id] = ed;
-                        // Reset unsaved state on startup load
-                        setTabs(p => p.map(t => t.id === id ? { ...t, isUnsaved: false } : t));
-                        // Auto-save the normalized content back to the file
-                        const currentTab = tabsRef.current.find(t => t.id === id);
-                        if (currentTab && currentTab.filePath) {
-                          const content = ed.storage.markdown.getMarkdown();
-                          window.api.saveFile({ filePath: currentTab.filePath, content });
-                        }
-                      }}
-                      onSelectionUpdate={() => setSelectionTick(p => p + 1)} settings={settings} />
+                      onEditorReady={handleEditorReady}
+                      onSelectionUpdate={handleSelectionUpdate}
+                      settings={settings} />
                   </div>
                 </Fragment>
               ))}
@@ -1337,7 +1359,13 @@ function App() {
           <FAB onClick={toggleReadOnly} icon={<Pencil size={17} />} title="Switch to Edit Mode" on accent={themeColors.accent} bg={themeColors.accentBg} dk={dk} anim={settings.animationsEnabled} />
         ) : (
           <>
-            <FAB onClick={() => setIsSourceMode(p => !p)} icon={isSourceMode ? <Code size={17} /> : <FileText size={17} />} title="Source Mode" on={isSourceMode} accent={themeColors.accent} bg={themeColors.accentBg} dk={dk} anim={settings.animationsEnabled} />
+            <FAB onClick={() => {
+              if (!isSourceMode && activeEditor) {
+                const md = activeEditor.storage.markdown.getMarkdown();
+                setTabs(ts => ts.map(t => t.id === activeTabId ? { ...t, content: md } : t));
+              }
+              setIsSourceMode(p => !p);
+            }} icon={isSourceMode ? <Code size={17} /> : <FileText size={17} />} title="Source Mode" on={isSourceMode} accent={themeColors.accent} bg={themeColors.accentBg} dk={dk} anim={settings.animationsEnabled} />
             <FAB onClick={toggleReadOnly} icon={<BookOpen size={17} />} title="Reading Mode" on={false} accent={themeColors.accent} bg={themeColors.accentBg} dk={dk} anim={settings.animationsEnabled} />
             <FAB onClick={() => setIsMinimalistMode(p => !p)} icon={isMinimalistMode ? <Eye size={17} /> : <EyeOff size={17} />} title="Minimalist" on={isMinimalistMode} accent={themeColors.accent} bg={themeColors.accentBg} dk={dk} anim={settings.animationsEnabled} />
           </>
