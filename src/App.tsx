@@ -1,19 +1,18 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
-import React from 'react';
+import { useEffect, useState, useRef, useCallback, Fragment } from 'react';
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from 'tiptap-markdown';
 import {
   X, Folder, File, FolderOpen, Plus, FileText, Save,
-  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, ListTree, Book, Search, ArrowUp, ArrowDown,
+  PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Search, ArrowUp, ArrowDown,
   Bold, Italic, Strikethrough, Code, List, ListOrdered, Quote, Terminal, Undo, Redo,
   Minus, Square, Settings, Copy as CopyAllIcon,
-  Keyboard, Palette, Volume2, Pen, Eye, EyeOff,
+  Eye, EyeOff,
   Pencil, ChevronUp, ChevronDown, BookOpen, AlignLeft, AlignCenter, AlignRight, AlignJustify, Table as TableIcon,
-  Link2, Image as ImageIcon, CheckSquare, Highlighter, Subscript as SubscriptIcon, Superscript as SuperscriptIcon, Asterisk, ListMinus
+  Link2, Image as ImageIcon, CheckSquare, Highlighter, Subscript as SubscriptIcon, Superscript as SuperscriptIcon, Asterisk, ListMinus, Download
 } from 'lucide-react';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
-import { createLowlight, all } from 'lowlight';
+import { createLowlight, common } from 'lowlight';
 import { SearchExtension } from './SearchExtension';
 import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
@@ -21,18 +20,21 @@ import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { TextAlign } from '@tiptap/extension-text-align';
 import Link from '@tiptap/extension-link';
-import Image from '@tiptap/extension-image';
+import { CustomImage } from './extensions/CustomImage';
 import { CustomTaskList, CustomTaskItem } from './extensions/TaskLists';
 import { CustomHighlight, CustomSubscript, CustomSuperscript } from './extensions/Marks';
 import { CustomHeading } from './extensions/Heading';
 import { FootnoteReference, Footnote, FootnoteContainer, FootnoteSep } from './extensions/Footnotes';
 import { DefList, DefTerm, DefDescription } from './extensions/DefList';
 import { Emoji } from './extensions/Emoji';
-import { soundManager } from './utils/SoundManager';
+import { MathInline, MathBlock } from './extensions/MathExtension';
 import { FullscreenImageViewer } from './components/FullscreenImageViewer';
+import { SettingsModal, type AppSettings, DEFAULT_SETTINGS, THEME_COLORS } from './components/settings/SettingsModal';
+import { ExportModal } from './components/editor/ExportModal';
+import { renderMermaidDiagrams } from './utils/renderMermaid';
 import appIconImg from '../icon.ico';
 
-const lowlight = createLowlight(all);
+const lowlight = createLowlight(common);
 
 /**
  * ============================================================================
@@ -43,22 +45,26 @@ declare global {
   interface Window {
     api: {
       onFileLoaded: (callback: (data: { filePath: string, content: string }) => void) => void;
-      saveFile: (data: { filePath: string | null, content: string }) => Promise<{ success: boolean, filePath?: string }>;
-      saveAsFile: (data: { content: string, defaultName?: string }) => Promise<{ success: boolean, filePath?: string }>;
+      saveFile: (data: { filePath: string | null, content: string }) => Promise<{ success: boolean, filePath?: string, error?: string }>;
+      saveAsFile: (data: { content: string, defaultName?: string }) => Promise<{ success: boolean, filePath?: string, error?: string, canceled?: boolean }>;
       onAppCloseRequest: (callback: () => void) => void;
       closeWindowConfirmed: () => void;
       showUnsavedDialog: () => Promise<number>;
       selectDirectory: () => Promise<string | null>;
       readDirectory: (dirPath: string) => Promise<Array<{ name: string, isDirectory: boolean, path: string }>>;
-      readFile: (filePath: string) => Promise<{ success: boolean, content?: string }>;
+      readFile: (filePath: string) => Promise<{ success: boolean, content?: string, error?: string }>;
       rendererReady: () => void;
       minimizeWindow: () => void;
       maximizeWindow: () => void;
       closeWindow: () => void;
       setAsDefault: () => Promise<{ success: boolean; error?: string }>;
+      exportToPDF: (options: { defaultName?: string, pageSize?: string }) => Promise<{ success: boolean, filePath?: string, error?: string, canceled?: boolean }>;
+      saveAssetImage: (data: { base64Data: string, activeFilePath: string | null, fileName?: string }) => Promise<{ success: boolean, relativePath?: string, fullPath?: string, error?: string }>;
+      onWindowStateChange: (callback: (state: { isMaximized: boolean }) => void) => void;
     }
   }
 }
+
 
 interface Tab {
   id: string;
@@ -69,60 +75,7 @@ interface Tab {
   isReadOnly: boolean;
 }
 
-type AppTheme = 'default' | 'ocean' | 'forest' | 'sunset' | 'midnight';
 
-interface AppSettings {
-  theme: AppTheme;
-  isDark: boolean;
-  fontSize: number;
-  lineHeight: number;
-  editorMaxWidth: number;
-  wordWrap: boolean;
-  autoSave: boolean;
-  autoSaveInterval: number;
-  typewriterSound: boolean;
-  saveSound: boolean;
-  ambientSound: boolean;
-  notificationSound: boolean;
-  backgroundMusic: boolean;
-  backgroundMusicTrack: string;
-  soundVolume: number;
-  animationsEnabled: boolean;
-  showStatusBar: boolean;
-  sidebarWidth: number;
-  spellCheck: boolean;
-  copyAsMarkdown: boolean;
-}
-
-const DEFAULT_SETTINGS: AppSettings = {
-  theme: 'default', isDark: true, fontSize: 18, lineHeight: 1.75,
-  editorMaxWidth: 768, wordWrap: true, autoSave: false, autoSaveInterval: 30,
-  typewriterSound: false, saveSound: true, ambientSound: false,
-  notificationSound: true, backgroundMusic: false, backgroundMusicTrack: 'none',
-  soundVolume: 50, animationsEnabled: true, showStatusBar: true,
-  sidebarWidth: 260, spellCheck: false, copyAsMarkdown: true,
-};
-
-const THEME_COLORS: Record<AppTheme, { accent: string, accentBg: string, label: string }> = {
-  default: { accent: '#3b82f6', accentBg: 'rgba(59,130,246,0.1)', label: 'Default Blue' },
-  ocean: { accent: '#06b6d4', accentBg: 'rgba(6,182,212,0.1)', label: 'Ocean Cyan' },
-  forest: { accent: '#22c55e', accentBg: 'rgba(34,197,94,0.1)', label: 'Forest Green' },
-  sunset: { accent: '#f97316', accentBg: 'rgba(249,115,22,0.1)', label: 'Sunset Orange' },
-  midnight: { accent: '#a78bfa', accentBg: 'rgba(167,139,250,0.1)', label: 'Midnight Violet' },
-};
-
-const SHORTCUTS = [
-  { label: 'Save', keys: 'Ctrl+S' }, { label: 'Save As', keys: 'Ctrl+Shift+S' },
-  { label: 'Minimalist Mode', keys: 'Ctrl+Alt+M' }, { label: 'Toggle Bottom Bar', keys: 'Ctrl+/' },
-  { label: 'Settings', keys: 'Ctrl+,' }, { label: 'Bold', keys: 'Ctrl+B' },
-  { label: 'Italic', keys: 'Ctrl+I' }, { label: 'Strikethrough', keys: 'Ctrl+Shift+X' },
-  { label: 'Inline Code', keys: 'Ctrl+E' }, { label: 'Code Block', keys: 'Ctrl+Alt+C' },
-  { label: 'H1 / H2 / H3', keys: 'Ctrl+Alt+1/2/3' }, { label: 'Bullet List', keys: 'Ctrl+Shift+8' },
-  { label: 'Numbered List', keys: 'Ctrl+Shift+9' }, { label: 'Task List', keys: 'Ctrl+Shift+9' },
-  { label: 'Blockquote', keys: 'Ctrl+Shift+B' }, { label: 'Highlight', keys: 'Ctrl+Shift+H' },
-  { label: 'Subscript / Superscript', keys: 'Ctrl+, / Ctrl+.' },
-  { label: 'Undo / Redo', keys: 'Ctrl+Z / Ctrl+Y' },
-];
 
 const loadSettings = (): AppSettings => {
   try { const s = localStorage.getItem('mdreader-settings'); if (s) return { ...DEFAULT_SETTINGS, ...JSON.parse(s) }; } catch {}
@@ -187,7 +140,7 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
       TableCell,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Link.configure({ openOnClick: false }),
-      Image,
+      CustomImage,
       CustomTaskList,
       CustomTaskItem.configure({ nested: true }),
       CustomHighlight,
@@ -201,6 +154,8 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
       DefTerm,
       DefDescription,
       Emoji,
+      MathInline,
+      MathBlock,
     ],
     content: tab.content,
     editable: !tab.isReadOnly,
@@ -214,7 +169,7 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
     editorProps: {
       attributes: {
         class: `prose dark:prose-invert max-w-none focus:outline-none min-h-[calc(100vh-150px)] px-12 pt-6 pb-32 ${tab.isReadOnly ? 'cursor-default' : ''}`,
-        style: `font-size: ${settings.fontSize}px; line-height: ${settings.lineHeight}`,
+        style: `font-size: ${settings.fontSize}px; line-height: ${settings.lineHeight}; font-family: ${settings.fontFamily === 'mono' ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' : settings.fontFamily === 'serif' ? 'Georgia, Cambria, "Times New Roman", Times, serif' : 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'}`,
         spellcheck: settings.spellCheck ? 'true' : 'false',
       },
       handleDOMEvents: {
@@ -267,8 +222,6 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
                   const pos = view.posAtDOM(listItem, 0);
                   const node = view.state.doc.nodeAt(pos);
                   if (node && node.type.name === 'taskItem') {
-                    // Temporarily enable editing to toggle the checkbox
-                    const editorInstance = (view as any).editable !== undefined ? view : (view as any)._props?.editor;
                     const wasEditable = view.editable;
                     if (!wasEditable) {
                       (view as any).setProps({ editable: () => true });
@@ -288,9 +241,64 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
           }
           return false;
         },
-        keydown: (view, event) => {
-          if (settings.typewriterSound && event.key.length === 1) {
-            soundManager.playTypewriter();
+        paste: (view, event) => {
+          const items = event.clipboardData?.items;
+          if (items) {
+            for (let i = 0; i < items.length; i++) {
+              const item = items[i];
+              if (item.type.startsWith('image/')) {
+                const file = item.getAsFile();
+                if (file) {
+                  event.preventDefault();
+                  const reader = new FileReader();
+                  reader.onload = async () => {
+                    const base64Data = reader.result as string;
+                    const res = await window.api.saveAssetImage({
+                      base64Data,
+                      activeFilePath: tab.filePath,
+                      fileName: `image-${Date.now()}.png`
+                    });
+                    if (res.success && res.relativePath) {
+                      const editorInstance = (view as any)._props?.editor;
+                      if (editorInstance) {
+                        editorInstance.chain().focus().setImage({ src: res.relativePath, alt: 'Pasted Image' }).run();
+                      }
+                      window.dispatchEvent(new CustomEvent('show-toast', { detail: 'Pasted image saved into assets!' }));
+                    }
+                  };
+                  reader.readAsDataURL(file);
+                  return true;
+                }
+              }
+            }
+          }
+          return false;
+        },
+        drop: (view, event) => {
+          const files = event.dataTransfer?.files;
+          if (files && files.length > 0) {
+            const file = files[0];
+            if (file.type.startsWith('image/')) {
+              event.preventDefault();
+              const reader = new FileReader();
+              reader.onload = async () => {
+                const base64Data = reader.result as string;
+                const res = await window.api.saveAssetImage({
+                  base64Data,
+                  activeFilePath: tab.filePath,
+                  fileName: file.name || `image-${Date.now()}.png`
+                });
+                if (res.success && res.relativePath) {
+                  const editorInstance = (view as any)._props?.editor;
+                  if (editorInstance) {
+                    editorInstance.chain().focus().setImage({ src: res.relativePath, alt: file.name }).run();
+                  }
+                  window.dispatchEvent(new CustomEvent('show-toast', { detail: 'Dropped image saved into assets!' }));
+                }
+              };
+              reader.readAsDataURL(file);
+              return true;
+            }
           }
           return false;
         },
@@ -301,7 +309,7 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
                 extensions: (view as any)._props.editor.extensionManager.extensions,
                 content: { type: 'doc', content: view.state.selection.content().toJSON() }
               });
-              const md = tempEditor.storage.markdown.getMarkdown();
+              const md = (tempEditor.storage as any).markdown.getMarkdown();
               tempEditor.destroy();
               event.clipboardData.setData('text/plain', md);
               window.dispatchEvent(new CustomEvent('show-toast', { detail: 'Copied Markdown to clipboard!' }));
@@ -323,13 +331,20 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
     if (!editor) return;
     // @ts-ignore
     const cur = editor.storage.markdown.getMarkdown();
-    if (cur !== tab.content) editor.commands.setContent(tab.content, false);
+    if (cur !== tab.content) editor.commands.setContent(tab.content, { emitUpdate: false });
   }, [tab.content, editor]);
 
   useEffect(() => { 
     if (isActive && editor) onEditorActive(editor);
     if (editor && onEditorReady) onEditorReady(tab.id, editor);
   }, [isActive, editor, onEditorActive, onEditorReady, tab.id]);
+
+  useEffect(() => {
+    if (editor?.view?.dom) {
+      (window as any).__currentDocumentDir = tab.filePath ? getParentDirectory(tab.filePath) : null;
+      renderMermaidDiagrams(editor.view.dom, settings.isDark);
+    }
+  }, [editor, tab.content, tab.isReadOnly, settings.isDark, tab.filePath]);
 
   return (
     <div style={{ display: isActive ? 'block' : 'none' }} className="h-full w-full relative">
@@ -338,195 +353,6 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
   );
 };
 
-/* ── Small Components ── */
-const Toggle = ({ checked, onChange }: { checked: boolean, onChange: (v: boolean) => void }) => (
-  <div className={`toggle-switch ${checked ? 'on' : ''}`} onClick={() => onChange(!checked)} />
-);
-
-const RangeSlider = ({ min, max, step, value, onChange, accent }: any) => {
-  const pct = ((value - min) / (max - min)) * 100;
-  return (
-    <input type="range" min={min} max={max} step={step} value={value} onChange={onChange} className="w-32"
-      style={{ background: `linear-gradient(to right, ${accent} 0%, ${accent} ${pct}%, rgba(128,128,128,0.2) ${pct}%, rgba(128,128,128,0.2) 100%)` }}
-    />
-  );
-};
-
-const SR = ({ label, desc, children }: { label: string, desc?: string, children: React.ReactNode }) => (
-  <div className="flex items-center justify-between">
-    <div><div className="text-sm font-medium">{label}</div>{desc && <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{desc}</div>}</div>
-    {children}
-  </div>
-);
-
-/* ── Settings Modal ── */
-const SettingsModal = ({ settings, onUpdate, onClose, themeColors }: {
-  settings: AppSettings, onUpdate: (s: Partial<AppSettings>) => void, onClose: () => void, themeColors: typeof THEME_COLORS[AppTheme]
-}) => {
-  const [activeTab, setActiveTab] = useState<'appearance' | 'editor' | 'keybindings' | 'sounds'>('appearance');
-  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
-  const [selectedDevice, setSelectedDevice] = useState<string>('default');
-  const stabs = [
-    { id: 'appearance' as const, label: 'Appearance', icon: <Palette size={15} /> },
-    { id: 'editor' as const, label: 'Editor', icon: <Pen size={15} /> },
-    { id: 'keybindings' as const, label: 'Keys', icon: <Keyboard size={15} /> },
-    { id: 'sounds' as const, label: 'Sounds', icon: <Volume2 size={15} /> },
-  ];
-
-  const historyRef = useRef<AppSettings[]>([]);
-
-  const handleUpdate = (s: Partial<AppSettings>) => {
-    historyRef.current.push({ ...settings });
-    onUpdate(s);
-    if (s.soundVolume !== undefined) soundManager.setVolume(s.soundVolume);
-    if (s.typewriterSound !== undefined || s.saveSound !== undefined || s.notificationSound !== undefined || s.ambientSound !== undefined || s.backgroundMusic !== undefined) {
-      soundManager.setEnabled(s.typewriterSound || s.saveSound || s.notificationSound || s.ambientSound || s.backgroundMusic || false);
-    }
-  };
-
-  useEffect(() => {
-    navigator.mediaDevices.enumerateDevices().then(devices => {
-      setAudioDevices(devices.filter(d => d.kind === 'audiooutput'));
-    }).catch(err => console.error("Could not enumerate audio devices:", err));
-  }, []);
-
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
-        const last = historyRef.current.pop();
-        if (last) {
-          e.preventDefault();
-          e.stopPropagation();
-          onUpdate(last);
-        }
-      }
-    };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, [settings, onUpdate]);
-
-  return (
-    <div className="fixed inset-0 z-[200] flex justify-center items-start py-24 bg-black/50 backdrop-blur-sm px-4" onClick={onClose}>
-      <div className="bg-white dark:bg-[#1e1e1e] shadow-2xl w-full max-w-2xl flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden rounded-xl max-h-full"
-        onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800 shrink-0">
-          <h2 className="text-lg font-semibold flex items-center gap-2"><Settings size={18} style={{ color: themeColors.accent }} /> Settings</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"><X size={18} /></button>
-        </div>
-        <div className="flex gap-1 px-6 pt-4 pb-2 border-b border-gray-200 dark:border-gray-800 shrink-0 overflow-x-auto">
-          {stabs.map(t => (
-            <button key={t.id} onClick={() => setActiveTab(t.id)}
-              className={`settings-tab flex items-center gap-2 whitespace-nowrap ${activeTab === t.id ? 'active' : ''}`}
-              style={activeTab === t.id ? { color: themeColors.accent } : {}}
-            >{t.icon}{t.label}</button>
-          ))}
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-6 py-5" key={activeTab}>
-          {activeTab === 'appearance' && (
-            <div className="space-y-6">
-              <div>
-                <label className="text-sm font-medium mb-3 block">Color Theme</label>
-                <div className="grid grid-cols-5 gap-2">
-                  {(Object.keys(THEME_COLORS) as AppTheme[]).map(t => (
-                    <button key={t} onClick={() => handleUpdate({ theme: t })}
-                      className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all ${settings.theme === t ? 'shadow-md' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}`}
-                      style={settings.theme === t ? { borderColor: THEME_COLORS[t].accent } : {}}>
-                      <div className="w-6 h-6 rounded-full" style={{ backgroundColor: THEME_COLORS[t].accent }} />
-                      <span className="text-[10px]">{THEME_COLORS[t].label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <SR label="Dark Mode" desc="Use dark color scheme"><Toggle checked={settings.isDark} onChange={v => handleUpdate({ isDark: v })} /></SR>
-              <SR label="Animations" desc="Smooth transitions"><Toggle checked={settings.animationsEnabled} onChange={v => handleUpdate({ animationsEnabled: v })} /></SR>
-              <SR label="Status Bar" desc="Show word/char count"><Toggle checked={settings.showStatusBar} onChange={v => handleUpdate({ showStatusBar: v })} /></SR>
-            </div>
-          )}
-          {activeTab === 'editor' && (
-            <div className="space-y-6">
-              <SR label="Font Size" desc={`${settings.fontSize}px`}><RangeSlider min={12} max={28} step={1} value={settings.fontSize} onChange={(e: any) => handleUpdate({ fontSize: +e.target.value })} accent={themeColors.accent} /></SR>
-              <SR label="Line Height" desc={`${settings.lineHeight}`}><RangeSlider min={1.2} max={2.5} step={0.05} value={settings.lineHeight} onChange={(e: any) => handleUpdate({ lineHeight: +e.target.value })} accent={themeColors.accent} /></SR>
-              <SR label="Max Width" desc={`${settings.editorMaxWidth}px`}><RangeSlider min={480} max={1400} step={20} value={settings.editorMaxWidth} onChange={(e: any) => handleUpdate({ editorMaxWidth: +e.target.value })} accent={themeColors.accent} /></SR>
-              <SR label="Word Wrap"><Toggle checked={settings.wordWrap} onChange={v => handleUpdate({ wordWrap: v })} /></SR>
-              <SR label="Copy as Markdown" desc="Ctrl+C copies raw markdown text instead of rich formatting"><Toggle checked={settings.copyAsMarkdown} onChange={v => handleUpdate({ copyAsMarkdown: v })} /></SR>
-              <SR label="Spell Check"><Toggle checked={settings.spellCheck} onChange={v => handleUpdate({ spellCheck: v })} /></SR>
-              <SR label="Auto Save"><Toggle checked={settings.autoSave} onChange={v => handleUpdate({ autoSave: v })} /></SR>
-              {settings.autoSave && <SR label="Interval" desc={`${settings.autoSaveInterval}s`}><RangeSlider min={5} max={120} step={5} value={settings.autoSaveInterval} onChange={(e: any) => handleUpdate({ autoSaveInterval: +e.target.value })} accent={themeColors.accent} /></SR>}
-              <div className="pt-4 mt-4 border-t border-gray-200 dark:border-gray-800">
-                <button 
-                  onClick={async () => {
-                    const res = await window.api.setAsDefault();
-                    if (res.success) {
-                      alert("Successfully set as the default Markdown editor for Windows!");
-                    } else {
-                      alert("Failed to set as default: " + (res.error || "Unknown error"));
-                    }
-                  }}
-                  className="w-full py-2.5 rounded-lg text-sm font-medium transition-colors"
-                  style={{ backgroundColor: themeColors.accentBg, color: themeColors.accent }}
-                >
-                  Set as Default Windows App
-                </button>
-                <p className="text-[11px] text-gray-500 mt-2 text-center">
-                  Registers this application to open .md files natively.
-                </p>
-              </div>
-            </div>
-          )}
-          {activeTab === 'keybindings' && (
-            <div className="space-y-1">
-              {SHORTCUTS.map((s, i) => (
-                <div key={i} className="flex justify-between items-center py-2.5 px-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                  <span className="text-sm">{s.label}</span>
-                  <kbd className="px-2.5 py-1 text-xs font-mono rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400">{s.keys}</kbd>
-                </div>
-              ))}
-            </div>
-          )}
-          {activeTab === 'sounds' && (
-            <div className="space-y-6">
-              <SR label="Output Device">
-                <select value={selectedDevice} onChange={e => { setSelectedDevice(e.target.value); soundManager.setOutputDevice(e.target.value); }}
-                  className="text-sm px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none max-w-[200px] truncate">
-                  <option value="default">System Default</option>
-                  {audioDevices.map(d => (
-                    <option key={d.deviceId} value={d.deviceId}>{d.label || 'Unknown Device'}</option>
-                  ))}
-                </select>
-              </SR>
-              <SR label="Master Volume" desc={`${settings.soundVolume}%`}><RangeSlider min={0} max={100} step={1} value={settings.soundVolume} onChange={(e: any) => handleUpdate({ soundVolume: +e.target.value })} accent={themeColors.accent} /></SR>
-              <SR label="Typewriter Sounds" desc="Click sound on keypress"><Toggle checked={settings.typewriterSound} onChange={v => handleUpdate({ typewriterSound: v })} /></SR>
-              <SR label="Save Sound" desc="Chime on save"><Toggle checked={settings.saveSound} onChange={v => handleUpdate({ saveSound: v })} /></SR>
-              <SR label="Notification Sounds" desc="Alert & status sounds"><Toggle checked={settings.notificationSound} onChange={v => handleUpdate({ notificationSound: v })} /></SR>
-              <SR label="Ambient Sound" desc="Soft background noise"><Toggle checked={settings.ambientSound} onChange={v => handleUpdate({ ambientSound: v })} /></SR>
-              <SR label="Background Music" desc="Lo-fi / calm music"><Toggle checked={settings.backgroundMusic} onChange={v => handleUpdate({ backgroundMusic: v })} /></SR>
-              {settings.backgroundMusic && (
-                <SR label="Music Track">
-                  <select value={settings.backgroundMusicTrack} onChange={e => handleUpdate({ backgroundMusicTrack: e.target.value })}
-                    className="text-sm px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 outline-none">
-                    <option value="none">None</option>
-                    <option value="lofi">Lo-Fi Beats</option>
-                    <option value="rain">Rain Sounds</option>
-                    <option value="forest">Forest Ambience</option>
-                    <option value="cafe">Café Chatter</option>
-                    <option value="piano">Soft Piano</option>
-                    <option value="ocean">Ocean Waves</option>
-                  </select>
-                </SR>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 dark:border-gray-800 shrink-0 bg-gray-50 dark:bg-[#161616]">
-          <button onClick={() => handleUpdate(DEFAULT_SETTINGS)} className="px-3 py-1.5 text-sm rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 transition-colors">Reset Defaults</button>
-          <span className="text-xs text-gray-400">Auto-saved</span>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 /**
  * ============================================================================
@@ -542,11 +368,14 @@ function App() {
    */
   const [settings, setSettings] = useState<AppSettings>(loadSettings);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isWindowMaximized, setIsWindowMaximized] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMinimalistMode, setIsMinimalistMode] = useState(false);
   const [isSourceMode, setIsSourceMode] = useState(false);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
   
   // Tiptap active editor reference for toolbar commands
   const [activeEditor, setActiveEditor] = useState<any>(null);
@@ -629,11 +458,6 @@ function App() {
     document.documentElement.style.setProperty('--accent-color', themeColors.accent);
     document.documentElement.style.setProperty('--accent-bg', themeColors.accentBg);
   }, [themeColors.accent, themeColors.accentBg]);
-
-  useEffect(() => {
-    soundManager.setVolume(settings.soundVolume);
-    soundManager.setEnabled(settings.typewriterSound || settings.saveSound || settings.notificationSound || settings.ambientSound || settings.backgroundMusic);
-  }, [settings]);
 
   useEffect(() => {
     const handleImage = (e: any) => setFullscreenImage(e.detail);
@@ -751,7 +575,7 @@ function App() {
     }
     let count = 0;
     const regex = new RegExp(searchQuery.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'), 'gi');
-    activeEditor.state.doc.descendants((node: any, pos: number) => {
+    activeEditor.state.doc.descendants((node: any) => {
       if (node.isText && node.text) {
         regex.lastIndex = 0;
         while (regex.exec(node.text) !== null) {
@@ -797,7 +621,7 @@ function App() {
     const res = await window.api.readFile(filePath);
     if (res.success && res.content !== undefined) {
       const fileName = filePath.split(/[/\\]/).pop() || 'Untitled.md';
-      const newTab: Tab = { id: Date.now().toString(), filePath, fileName, content: res.content, isUnsaved: false, isReadOnly: false };
+      const newTab: Tab = { id: Date.now().toString(), filePath, fileName, content: res.content, isUnsaved: false, isReadOnly: settings.defaultMode === 'read' };
       setTabs(prev => (prev.length === 1 && !prev[0].filePath && !prev[0].content && !prev[0].isUnsaved) ? [newTab] : [...prev, newTab]);
       setActiveTabId(newTab.id);
     }
@@ -805,6 +629,9 @@ function App() {
 
   useEffect(() => {
     if (!window.api) return;
+    window.api.onWindowStateChange((state) => {
+      setIsWindowMaximized(state.isMaximized);
+    });
     window.api.onFileLoaded((data) => {
       console.log("Renderer received file-loaded:", data);
       setTabs(prev => {
@@ -816,7 +643,7 @@ function App() {
           return prev;
         }
         const fileName = data.filePath.split(/[/\\]/).pop() || 'Untitled.md';
-        const newTab: Tab = { id: Date.now().toString(), filePath: data.filePath, fileName, content: data.content, isUnsaved: false, isReadOnly: true };
+        const newTab: Tab = { id: Date.now().toString(), filePath: data.filePath, fileName, content: data.content, isUnsaved: false, isReadOnly: settings.defaultMode === 'read' };
         console.log("Adding new tab:", newTab);
         setTimeout(() => setActiveTabId(newTab.id), 0);
         if (prev.length === 1 && !prev[0].filePath && !prev[0].content && !prev[0].isUnsaved) {
@@ -835,7 +662,8 @@ function App() {
       }
     });
     window.api.rendererReady();
-  }, []);
+  }, [settings.defaultMode]);
+
 
   const handleCloseSaveAll = async () => {
     const unsaved = tabs.filter(t => t.isUnsaved);
@@ -896,11 +724,8 @@ function App() {
         loadDir(currentDir);
       }
     }
-    
-    if (settings.saveSound) {
-      soundManager.playSave();
-    }
   };
+
 
   // Auto save
   useEffect(() => {
@@ -926,6 +751,9 @@ function App() {
     const h = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
       if (mod && e.key === 's') { e.preventDefault(); handleSave(activeTabId, e.shiftKey); }
+      if (mod && e.key.toLowerCase() === 'e') { e.preventDefault(); setIsExportOpen(true); }
+      if (mod && e.key.toLowerCase() === 'p') { e.preventDefault(); window.print(); }
+      if (mod && e.shiftKey && e.key.toLowerCase() === 'r') { e.preventDefault(); toggleReadOnly(); }
       if (mod && e.key === 'f') { 
         e.preventDefault(); 
         setIsSearchExpanded(true); 
@@ -938,6 +766,7 @@ function App() {
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, [activeTabId, tabs]);
+
 
   const closeTab = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -986,7 +815,8 @@ function App() {
       style={{ backgroundColor: dk ? '#121212' : '#ffffff', color: dk ? '#f4f4f5' : '#111111' }}>
 
       {/* ── Title Bar ── */}
-      <div className="h-10 flex items-center justify-between shrink-0 select-none"
+      <div className="h-10 flex items-center justify-between shrink-0 select-none cursor-default"
+        onDoubleClick={() => window.api.maximizeWindow()}
         style={{ backgroundColor: dk ? '#1a1a1a' : '#e4e4e7', borderBottom: `1px solid ${dk ? '#2a2a2a' : '#d4d4d8'}`, WebkitAppRegion: 'drag' } as React.CSSProperties}>
         <div className="flex items-center gap-2 pl-4" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           <img src={appIconImg} alt="App Icon" className="w-4 h-4 object-contain" />
@@ -1001,10 +831,11 @@ function App() {
 
         <div className="flex items-center h-full shrink-0 justify-end" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
           <WinBtn onClick={() => window.api.minimizeWindow()} icon={<Minus size={14} />} dk={dk} />
-          <WinBtn onClick={() => window.api.maximizeWindow()} icon={<Square size={12} />} dk={dk} />
+          <WinBtn onClick={() => window.api.maximizeWindow()} icon={isWindowMaximized ? <CopyAllIcon size={12} className="rotate-180" /> : <Square size={12} />} dk={dk} />
           <WinBtn onClick={() => window.api.closeWindow()} icon={<X size={14} />} dk={dk} isClose />
         </div>
       </div>
+
 
       {/* ── Main ── */}
       <div className="flex flex-1 overflow-hidden">
@@ -1126,9 +957,15 @@ function App() {
                       <div className="w-px h-4 mx-0.5" style={{ backgroundColor: dk ? '#27272a' : '#ccc' }} />
                     </>
                   )}
+                  <button onClick={() => setIsExportOpen(true)} className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-all border"
+                    style={{ borderColor: dk ? '#333' : '#ddd', color: dk ? '#aaa' : '#555', backgroundColor: 'transparent' }}
+                    onMouseEnter={e => { e.currentTarget.style.backgroundColor = dk ? '#333' : '#eee'; }}
+                    onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                    title="Export Document (PDF, HTML, Print)">
+                    <Download size={12} /> Export
+                  </button>
                   <button onClick={() => { 
                     navigator.clipboard.writeText(activeTab.content); 
-                    soundManager.playNotification(); 
                     setToastMessage('Copied all text to clipboard!');
                     setTimeout(() => setToastMessage(null), 2000);
                   }} className="flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-all border"
@@ -1139,6 +976,7 @@ function App() {
                     <CopyAllIcon size={12} /> Copy All
                   </button>
                   <SideBtn onClick={() => setIsStructureOpen(p => !p)} icon={isStructureOpen ? <PanelRightClose size={18} /> : <PanelRightOpen size={18} />} dk={dk} title="Toggle Outline" />
+
                 </div>
               </div>
             </div>
@@ -1160,7 +998,7 @@ function App() {
                 <div className="h-12 w-1 rounded-full bg-gray-400 dark:bg-gray-500 hover:bg-blue-500 dark:hover:bg-blue-400 transition-colors" />
               </div>
                {tabs.map(tab => (
-                <React.Fragment key={tab.id}>
+                <Fragment key={tab.id}>
                   <textarea
                     value={tab.content}
                     onChange={e => {
@@ -1194,7 +1032,7 @@ function App() {
                       }}
                       onSelectionUpdate={() => setSelectionTick(p => p + 1)} settings={settings} />
                   </div>
-                </React.Fragment>
+                </Fragment>
               ))}
             </div>
           </div>
@@ -1444,7 +1282,31 @@ function App() {
         <FAB onClick={() => setIsSettingsOpen(true)} icon={<Settings size={17} />} title="Settings (Ctrl+,)" on={false} accent={themeColors.accent} bg={themeColors.accentBg} dk={dk} anim={settings.animationsEnabled} />
       </div>
 
-      {isSettingsOpen && <SettingsModal settings={settings} onUpdate={updateSettings} onClose={() => setIsSettingsOpen(false)} themeColors={themeColors} />}
+      {isSettingsOpen && (
+        <SettingsModal
+          settings={settings}
+          onUpdate={updateSettings}
+          onClose={() => setIsSettingsOpen(false)}
+          themeColors={themeColors}
+          onOpenExport={() => setIsExportOpen(true)}
+        />
+      )}
+
+      {isExportOpen && (
+        <ExportModal
+          isOpen={isExportOpen}
+          onClose={() => setIsExportOpen(false)}
+          fileName={activeTab.fileName}
+          getEditorHTML={() => (activeEditor ? activeEditor.getHTML() : activeTab.content)}
+          themeAccent={themeColors.accent}
+          isDark={dk}
+          onToast={(msg) => {
+            setToastMessage(msg);
+            setTimeout(() => setToastMessage(null), 2500);
+          }}
+        />
+      )}
+
 
       {/* Unsaved Changes Custom Dialog */}
       {showCloseDialog && (

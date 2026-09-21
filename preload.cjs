@@ -15,4 +15,8 @@ contextBridge.exposeInMainWorld('api', {
   maximizeWindow: () => ipcRenderer.send('maximize-window'),
   closeWindow: () => ipcRenderer.send('close-window'),
   setAsDefault: () => ipcRenderer.invoke('set-as-default'),
+  exportToPDF: (options) => ipcRenderer.invoke('export-to-pdf', options),
+  saveAssetImage: (data) => ipcRenderer.invoke('save-asset-image', data),
+  onWindowStateChange: (callback) => ipcRenderer.on('window-state-change', (_event, state) => callback(state)),
 });
+

@@ -57,7 +57,7 @@ export const SearchExtension = Extension.create<SearchOptions>({
           init() {
             return DecorationSet.empty;
           },
-          apply(tr, oldState) {
+          apply(tr, _oldState) {
             // Check if we have a search term change
             const meta = tr.getMeta(SearchPluginKey);
             const term = meta !== undefined ? meta.searchTerm : extensionThis.options.searchTerm;

@@ -70,19 +70,20 @@ export class SoundManager {
 
   public playSave() {
     if (!this.isEnabled || !this.audioContext) return;
+    const ctx = this.audioContext;
     const gainNode = this.createGainNode();
     if (!gainNode) return;
 
     // Pleasant chime chord
     const freqs = [440, 554.37, 659.25]; // A4, C#5, E5 (A major)
-    const t = this.audioContext.currentTime;
+    const t = ctx.currentTime;
 
     gainNode.gain.setValueAtTime(0, t);
     gainNode.gain.linearRampToValueAtTime(this.volume * 0.2, t + 0.05);
     gainNode.gain.exponentialRampToValueAtTime(0.01, t + 0.8);
 
     freqs.forEach(freq => {
-      const osc = this.audioContext.createOscillator();
+      const osc = ctx.createOscillator();
       osc.type = 'sine';
       osc.frequency.value = freq;
       osc.connect(gainNode);

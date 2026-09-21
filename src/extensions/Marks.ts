@@ -28,10 +28,6 @@ export const CustomSubscript = Subscript.extend({
         parse: {
           setup(markdownit: any) {
             markdownit.use(markdownItSub);
-          },
-          updateDOM(element: HTMLElement) {
-            // Tiptap expects <sub>, but markdown-it-sub renders <sub>
-            // We just need to make sure the tags are preserved correctly.
           }
         }
       }

@@ -80,10 +80,12 @@ function handleFileOpenArg(argv, workingDirectory = null) {
   }
 }
 
-function openFile(filePath) {
+app.setAppUserModelId('com.adamk.markdownreader');
+
+async function openFile(filePath) {
   try {
     logToFile(`openFile: reading ${filePath}`);
-    const content = fs.readFileSync(filePath, 'utf-8');
+    const content = await fs.promises.readFile(filePath, 'utf-8');
     currentFilePath = filePath;
     if (mainWindow && !mainWindow.isDestroyed()) {
       logToFile(`Sending file-loaded event to renderer`);
@@ -106,12 +108,14 @@ function createWindow() {
     frame: false,
     show: false,
     backgroundColor: '#151515',
+    icon: path.join(__dirname, 'icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false
     },
   });
+
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
@@ -160,6 +164,14 @@ function createWindow() {
     if (mainWindow) mainWindow.minimize();
   });
 
+  mainWindow.on('maximize', () => {
+    mainWindow.webContents.send('window-state-change', { isMaximized: true });
+  });
+
+  mainWindow.on('unmaximize', () => {
+    mainWindow.webContents.send('window-state-change', { isMaximized: false });
+  });
+
   ipcMain.on('maximize-window', () => {
     if (mainWindow) {
       if (mainWindow.isMaximized()) {
@@ -193,12 +205,17 @@ ipcMain.on('renderer-ready', () => {
   }
 });
 
-// IPC
+// IPC File Operations (Asynchronous & Non-Blocking)
 ipcMain.handle('save-file', async (event, data) => {
   const { filePath, content } = data;
   if (filePath) {
-    fs.writeFileSync(filePath, content, 'utf-8');
-    return { success: true, filePath };
+    try {
+      await fs.promises.writeFile(filePath, content, 'utf-8');
+      return { success: true, filePath };
+    } catch (err) {
+      console.error('Failed to save file:', err);
+      return { success: false, error: err.message };
+    }
   } else {
     return await handleSaveAs(content);
   }
@@ -210,14 +227,19 @@ ipcMain.handle('save-as-file', async (event, data) => {
 });
 
 async function handleSaveAs(content, defaultName) {
-  const { filePath } = await dialog.showSaveDialog(mainWindow, {
+  const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
     title: 'Save Markdown As',
     defaultPath: defaultName,
-    filters: [{ name: 'Markdown', extensions: ['md'] }]
+    filters: [{ name: 'Markdown Document', extensions: ['md'] }]
   });
-  if (filePath) {
-    fs.writeFileSync(filePath, content, 'utf-8');
-    return { success: true, filePath };
+  if (!canceled && filePath) {
+    try {
+      await fs.promises.writeFile(filePath, content, 'utf-8');
+      return { success: true, filePath };
+    } catch (err) {
+      console.error('Failed to save as file:', err);
+      return { success: false, error: err.message };
+    }
   }
   return { success: false, canceled: true };
 }
@@ -246,7 +268,7 @@ ipcMain.handle('select-directory', async () => {
 
 ipcMain.handle('read-directory', async (event, dirPath) => {
   try {
-    const items = fs.readdirSync(dirPath, { withFileTypes: true });
+    const items = await fs.promises.readdir(dirPath, { withFileTypes: true });
     return items
       .filter(item => !item.name.startsWith('.') && item.name !== 'node_modules')
       .map(item => ({
@@ -266,11 +288,59 @@ ipcMain.handle('read-directory', async (event, dirPath) => {
 
 ipcMain.handle('read-file', async (event, filePath) => {
   try {
-    const content = fs.readFileSync(filePath, 'utf-8');
+    const content = await fs.promises.readFile(filePath, 'utf-8');
     return { success: true, content };
   } catch (err) {
     console.error('Failed to read file', err);
-    return { success: false };
+    return { success: false, error: err.message };
+  }
+});
+
+// PDF Export Handler
+ipcMain.handle('export-to-pdf', async (event, options = {}) => {
+  try {
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export Document to PDF',
+      defaultPath: options.defaultName || 'Document.pdf',
+      filters: [{ name: 'PDF Document', extensions: ['pdf'] }]
+    });
+    if (canceled || !filePath) return { success: false, canceled: true };
+
+    const pdfData = await mainWindow.webContents.printToPDF({
+      printBackground: true,
+      pageSize: options.pageSize || 'A4',
+      margins: {
+        marginType: 'standard'
+      }
+    });
+    await fs.promises.writeFile(filePath, pdfData);
+    return { success: true, filePath };
+  } catch (err) {
+    console.error('Failed to export PDF:', err);
+    return { success: false, error: err.message };
+  }
+});
+
+// Local Asset Image Saver (for clipboard paste and drag & drop)
+ipcMain.handle('save-asset-image', async (event, { base64Data, activeFilePath, fileName }) => {
+  try {
+    let targetDir;
+    if (activeFilePath) {
+      targetDir = path.join(path.dirname(activeFilePath), 'assets');
+    } else {
+      targetDir = path.join(app.getPath('userData'), 'assets');
+    }
+    await fs.promises.mkdir(targetDir, { recursive: true });
+    const cleanName = fileName || `image-${Date.now()}.png`;
+    const fullPath = path.join(targetDir, cleanName);
+    const buffer = Buffer.from(base64Data.replace(/^data:image\/\w+;base64,/, ''), 'base64');
+    await fs.promises.writeFile(fullPath, buffer);
+
+    const relativePath = activeFilePath ? `./assets/${cleanName}` : `file://${fullPath.replace(/\\/g, '/')}`;
+    return { success: true, relativePath, fullPath };
+  } catch (err) {
+    console.error('Failed to save asset image:', err);
+    return { success: false, error: err.message };
   }
 });
 
@@ -295,3 +365,4 @@ ipcMain.handle('set-as-default', async () => {
     });
   });
 });
+
