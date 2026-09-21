@@ -346,6 +346,25 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
     }
   }, [editor, tab.content, tab.isReadOnly, settings.isDark, tab.filePath]);
 
+  useEffect(() => {
+    if (!editor?.view?.dom) return;
+    const dom = editor.view.dom;
+    dom.style.fontSize = `${settings.fontSize}px`;
+    dom.style.lineHeight = `${settings.lineHeight}`;
+    dom.style.fontFamily = settings.fontFamily === 'mono' 
+      ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' 
+      : settings.fontFamily === 'serif' 
+        ? 'Georgia, Cambria, "Times New Roman", Times, serif' 
+        : 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    if (!settings.wordWrap) {
+      dom.style.whiteSpace = 'pre';
+      dom.style.overflowX = 'auto';
+    } else {
+      dom.style.whiteSpace = 'normal';
+      dom.style.overflowX = 'visible';
+    }
+  }, [editor, settings.fontSize, settings.lineHeight, settings.fontFamily, settings.wordWrap]);
+
   return (
     <div style={{ display: isActive ? 'block' : 'none' }} className="h-full w-full relative">
       <EditorContent editor={editor} className="h-full" />
@@ -420,8 +439,8 @@ function App() {
     onSubmit: (val1: string, val2: string) => void;
   } | null>(null);
 
-  const [tabs, setTabs] = useState<Tab[]>([
-    { id: '1', filePath: null, fileName: 'Untitled.md', content: '', isUnsaved: false, isReadOnly: false }
+  const [tabs, setTabs] = useState<Tab[]>(() => [
+    { id: '1', filePath: null, fileName: 'Untitled.md', content: '', isUnsaved: false, isReadOnly: loadSettings().defaultMode === 'read' }
   ]);
   const [activeTabId, setActiveTabId] = useState('1');
   const editorsRef = useRef<Record<string, any>>({});
@@ -492,8 +511,24 @@ function App() {
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
     document.body.classList.add('resizing');
-    const move = (ev: MouseEvent) => { if (isResizing.current) setSidebarWidth(Math.min(Math.max(ev.clientX, 180), 500)); };
-    const up = () => { isResizing.current = false; document.body.style.cursor = ''; document.body.style.userSelect = ''; document.body.classList.remove('resizing'); handle.style.opacity = ''; if (inner) inner.style.backgroundColor = ''; document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+    let latestWidth = sidebarWidth;
+    const move = (ev: MouseEvent) => { 
+      if (isResizing.current) {
+        latestWidth = Math.min(Math.max(ev.clientX, 180), 500);
+        setSidebarWidth(latestWidth); 
+      }
+    };
+    const up = () => { 
+      isResizing.current = false; 
+      document.body.style.cursor = ''; 
+      document.body.style.userSelect = ''; 
+      document.body.classList.remove('resizing'); 
+      handle.style.opacity = ''; 
+      if (inner) inner.style.backgroundColor = ''; 
+      document.removeEventListener('mousemove', move); 
+      document.removeEventListener('mouseup', up); 
+      updateSettings({ sidebarWidth: latestWidth });
+    };
     document.addEventListener('mousemove', move);
     document.addEventListener('mouseup', up);
   }, []);
@@ -895,7 +930,7 @@ function App() {
                   <button onClick={e => closeTab(tab.id, e)} className="p-0.5 rounded-full shrink-0 opacity-60 hover:opacity-100 transition-opacity"><X size={12} /></button>
                 </div>
               ))}
-              <button onClick={() => { const t: Tab = { id: Date.now().toString(), filePath: null, fileName: 'Untitled.md', content: '', isUnsaved: false, isReadOnly: false }; setTabs([...tabs, t]); setActiveTabId(t.id); }}
+              <button onClick={() => { const t: Tab = { id: Date.now().toString(), filePath: null, fileName: 'Untitled.md', content: '', isUnsaved: false, isReadOnly: settings.defaultMode === 'read' }; setTabs([...tabs, t]); setActiveTabId(t.id); }}
                 className="p-2.5 shrink-0 h-full" style={{ color: dk ? '#52525b' : '#71717a' }}><Plus size={15} /></button>
             </div>
           </div>
@@ -1004,12 +1039,15 @@ function App() {
                     onChange={e => {
                       setTabs(ts => ts.map(t => t.id === tab.id ? { ...t, content: e.target.value, isUnsaved: true } : t));
                     }}
+                    wrap={settings.wordWrap ? 'soft' : 'off'}
                     className="w-full h-full min-h-[calc(100vh-150px)] px-12 pt-6 pb-32 bg-transparent resize-none focus:outline-none"
                     style={{ 
                       display: activeTabId === tab.id && isSourceMode ? 'block' : 'none', 
                       fontSize: settings.fontSize, 
                       lineHeight: settings.lineHeight, 
                       fontFamily: 'monospace',
+                      whiteSpace: settings.wordWrap ? 'pre-wrap' : 'pre',
+                      overflowX: settings.wordWrap ? 'hidden' : 'auto',
                       color: dk ? '#e4e4e7' : '#18181b'
                     }}
                     spellCheck={settings.spellCheck}

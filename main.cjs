@@ -54,7 +54,8 @@ function handleFileOpenArg(argv, workingDirectory = null) {
   logToFile(`handleFileOpenArg. argv: ${JSON.stringify(argv)}, workingDirectory: ${workingDirectory}`);
   const rawFilePath = argv.find(arg => {
     const cleaned = arg.replace(/^"+|"+$/g, '');
-    return cleaned.toLowerCase().endsWith('.md');
+    const lower = cleaned.toLowerCase();
+    return lower.endsWith('.md') || lower.endsWith('.markdown') || lower.endsWith('.mdown') || lower.endsWith('.txt');
   });
   logToFile(`Found rawFilePath: ${rawFilePath}`);
   if (rawFilePath) {
@@ -350,6 +351,8 @@ ipcMain.handle('set-as-default', async () => {
   const exePath = process.execPath;
   const cmd = `reg add "HKCU\\Software\\Classes\\.md" /ve /d "MarkdownReader.Document" /f && ` +
               `reg add "HKCU\\Software\\Classes\\.md\\OpenWithProgids" /v "MarkdownReader.Document" /d "" /f && ` +
+              `reg add "HKCU\\Software\\Classes\\.markdown" /ve /d "MarkdownReader.Document" /f && ` +
+              `reg add "HKCU\\Software\\Classes\\.markdown\\OpenWithProgids" /v "MarkdownReader.Document" /d "" /f && ` +
               `reg add "HKCU\\Software\\Classes\\MarkdownReader.Document" /ve /d "Markdown File" /f && ` +
               `reg add "HKCU\\Software\\Classes\\MarkdownReader.Document\\DefaultIcon" /ve /d "\\"${exePath}\\",0" /f && ` +
               `reg add "HKCU\\Software\\Classes\\MarkdownReader.Document\\shell\\open\\command" /ve /d "\\"${exePath}\\" \\"%1\\"" /f && ` +
