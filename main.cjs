@@ -15,6 +15,7 @@ const isDev = !app.isPackaged;
 logToFile(`App starting. argv: ${JSON.stringify(process.argv)}, cwd: ${process.cwd()}`);
 
 let fileToOpen = null;
+let directoryToOpen = null;
 let isRendererReady = false;
 
 // Handle Windows file association argument
@@ -52,31 +53,40 @@ if (!gotTheLock) {
 
 function handleFileOpenArg(argv, workingDirectory = null) {
   logToFile(`handleFileOpenArg. argv: ${JSON.stringify(argv)}, workingDirectory: ${workingDirectory}`);
-  const rawFilePath = argv.find(arg => {
-    const cleaned = arg.replace(/^"+|"+$/g, '');
-    const lower = cleaned.toLowerCase();
-    return lower.endsWith('.md') || lower.endsWith('.markdown') || lower.endsWith('.mdown') || lower.endsWith('.txt');
-  });
-  logToFile(`Found rawFilePath: ${rawFilePath}`);
-  if (rawFilePath) {
-    const filePath = rawFilePath.replace(/^"+|"+$/g, '');
-    let resolvedPath = filePath;
-    if (!path.isAbsolute(filePath)) {
-      resolvedPath = workingDirectory 
-        ? path.resolve(workingDirectory, filePath) 
-        : path.resolve(filePath);
+  for (let i = 1; i < argv.length; i++) {
+    const raw = argv[i];
+    if (!raw || raw.startsWith('--') || raw.startsWith('-')) continue;
+    const cleaned = raw.replace(/^"+|"+$/g, '');
+    let resolved = cleaned;
+    if (!path.isAbsolute(resolved)) {
+      resolved = workingDirectory ? path.resolve(workingDirectory, resolved) : path.resolve(resolved);
     }
-    logToFile(`Resolved path: ${resolvedPath}`);
-    if (fs.existsSync(resolvedPath)) {
-      logToFile(`File exists. isRendererReady: ${isRendererReady}`);
-      if (isRendererReady) {
-        openFile(resolvedPath);
-      } else {
-        fileToOpen = resolvedPath;
-        logToFile(`Set fileToOpen = ${resolvedPath}`);
+    if (fs.existsSync(resolved)) {
+      try {
+        const stat = fs.statSync(resolved);
+        if (stat.isDirectory()) {
+          logToFile(`Found directory to open: ${resolved}`);
+          if (isRendererReady && mainWindow) {
+            mainWindow.webContents.send('open-directory', resolved);
+          } else {
+            directoryToOpen = resolved;
+          }
+          return;
+        } else if (stat.isFile()) {
+          const lower = resolved.toLowerCase();
+          if (lower.endsWith('.md') || lower.endsWith('.markdown') || lower.endsWith('.mdown') || lower.endsWith('.txt')) {
+            logToFile(`Found file to open: ${resolved}`);
+            if (isRendererReady && mainWindow) {
+              openFile(resolved);
+            } else {
+              fileToOpen = resolved;
+            }
+            return;
+          }
+        }
+      } catch (err) {
+        logToFile(`Error checking path: ${err.message}`);
       }
-    } else {
-      logToFile(`File does not exist: ${resolvedPath}`);
     }
   }
 }
@@ -198,11 +208,15 @@ app.on('window-all-closed', () => {
 });
 
 ipcMain.on('renderer-ready', () => {
-  logToFile(`renderer-ready event. isRendererReady was ${isRendererReady}, fileToOpen is ${fileToOpen}`);
+  logToFile(`renderer-ready event. isRendererReady was ${isRendererReady}, fileToOpen is ${fileToOpen}, directoryToOpen is ${directoryToOpen}`);
   isRendererReady = true;
   if (fileToOpen) {
     openFile(fileToOpen);
     fileToOpen = null;
+  }
+  if (directoryToOpen) {
+    if (mainWindow) mainWindow.webContents.send('open-directory', directoryToOpen);
+    directoryToOpen = null;
   }
 });
 
@@ -345,27 +359,184 @@ ipcMain.handle('save-asset-image', async (event, { base64Data, activeFilePath, f
   }
 });
 
-ipcMain.handle('set-as-default', async () => {
-  if (process.platform !== 'win32') return { success: false, error: 'Only supported on Windows' };
-  const { exec } = require('child_process');
-  const exePath = process.execPath;
-  const cmd = `reg add "HKCU\\Software\\Classes\\.md" /ve /d "MarkdownReader.Document" /f && ` +
-              `reg add "HKCU\\Software\\Classes\\.md\\OpenWithProgids" /v "MarkdownReader.Document" /d "" /f && ` +
-              `reg add "HKCU\\Software\\Classes\\.markdown" /ve /d "MarkdownReader.Document" /f && ` +
-              `reg add "HKCU\\Software\\Classes\\.markdown\\OpenWithProgids" /v "MarkdownReader.Document" /d "" /f && ` +
-              `reg add "HKCU\\Software\\Classes\\MarkdownReader.Document" /ve /d "Markdown File" /f && ` +
-              `reg add "HKCU\\Software\\Classes\\MarkdownReader.Document\\DefaultIcon" /ve /d "\\"${exePath}\\",0" /f && ` +
-              `reg add "HKCU\\Software\\Classes\\MarkdownReader.Document\\shell\\open\\command" /ve /d "\\"${exePath}\\" \\"%1\\"" /f && ` +
-              `reg add "HKCU\\Software\\Classes\\Applications\\MarkdownReader.exe\\shell\\open\\command" /ve /d "\\"${exePath}\\" \\"%1\\"" /f`;
-  return new Promise(resolve => {
-    exec(cmd, (error) => {
-      if (error) {
-        console.error('Registry error:', error);
-        resolve({ success: false, error: error.message });
-      } else {
-        resolve({ success: true });
-      }
+function runReg(args) {
+  return new Promise((resolve) => {
+    const { execFile } = require('child_process');
+    execFile('reg.exe', args, (error, stdout, stderr) => {
+      if (error) resolve({ success: false, error: error.message, stderr, code: error.code });
+      else resolve({ success: true, stdout: stdout || '' });
     });
   });
+}
+
+ipcMain.handle('check-windows-integration', async () => {
+  if (process.platform !== 'win32') {
+    return {
+      isSupported: false,
+      isDefaultApp: true,
+      hasDesktopShortcut: true,
+      hasStartMenuShortcut: true,
+      hasContextMenu: true,
+      allConfigured: true,
+    };
+  }
+
+  try {
+    const mdReg = await runReg(['query', 'HKCU\\Software\\Classes\\.md', '/ve']);
+    const isDefaultApp = mdReg.success && (mdReg.stdout || '').includes('MarkdownReader.Document');
+
+    const desktopShortcut = path.join(app.getPath('desktop'), 'MarkdownReader.lnk');
+    const hasDesktopShortcut = fs.existsSync(desktopShortcut);
+
+    const startMenuShortcut = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'MarkdownReader.lnk');
+    const hasStartMenuShortcut = fs.existsSync(startMenuShortcut);
+
+    const ctxReg = await runReg(['query', 'HKCU\\Software\\Classes\\SystemFileAssociations\\.md\\shell\\MarkdownReader']);
+    const hasContextMenu = ctxReg.success;
+
+    return {
+      isSupported: true,
+      isDefaultApp,
+      hasDesktopShortcut,
+      hasStartMenuShortcut,
+      hasContextMenu,
+      allConfigured: isDefaultApp && hasDesktopShortcut && hasStartMenuShortcut && hasContextMenu,
+    };
+  } catch (err) {
+    console.error('Failed to check Windows integration:', err);
+    return {
+      isSupported: true,
+      isDefaultApp: false,
+      hasDesktopShortcut: false,
+      hasStartMenuShortcut: false,
+      hasContextMenu: false,
+      allConfigured: false,
+      error: err.message,
+    };
+  }
+});
+
+ipcMain.handle('setup-windows-integration', async (_event, options = {}) => {
+  if (process.platform !== 'win32') return { success: false, error: 'Only supported on Windows' };
+
+  const {
+    defaultApp = true,
+    desktopShortcut = true,
+    startMenuShortcut = true,
+    contextMenu = true,
+  } = options;
+
+  const results = {
+    defaultApp: false,
+    desktopShortcut: false,
+    startMenuShortcut: false,
+    contextMenu: false,
+  };
+
+  const exePath = process.execPath;
+  const exeDir = path.dirname(exePath);
+
+  // 1. Setup default app file associations
+  if (defaultApp) {
+    try {
+      await runReg(['add', 'HKCU\\Software\\Classes\\.md', '/ve', '/d', 'MarkdownReader.Document', '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\.md\\OpenWithProgids', '/v', 'MarkdownReader.Document', '/d', '', '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\.markdown', '/ve', '/d', 'MarkdownReader.Document', '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\.markdown\\OpenWithProgids', '/v', 'MarkdownReader.Document', '/d', '', '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\MarkdownReader.Document', '/ve', '/d', 'Markdown File', '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\MarkdownReader.Document\\DefaultIcon', '/ve', '/d', `"${exePath}",0`, '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\MarkdownReader.Document\\shell\\open\\command', '/ve', '/d', `"${exePath}" "%1"`, '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\Applications\\MarkdownReader.exe\\shell\\open\\command', '/ve', '/d', `"${exePath}" "%1"`, '/f']);
+      results.defaultApp = true;
+    } catch (e) {
+      console.error('Failed defaultApp registry setup:', e);
+    }
+  }
+
+  // 2. Setup Desktop shortcut
+  if (desktopShortcut) {
+    try {
+      const desktopPath = path.join(app.getPath('desktop'), 'MarkdownReader.lnk');
+      const op = fs.existsSync(desktopPath) ? 'update' : 'create';
+      shell.writeShortcutLink(desktopPath, op, {
+        target: exePath,
+        cwd: exeDir,
+        icon: exePath,
+        iconIndex: 0,
+        description: 'MarkdownReader - Fast Markdown Workspace'
+      });
+      results.desktopShortcut = fs.existsSync(desktopPath);
+    } catch (e) {
+      console.error('Failed desktop shortcut creation:', e);
+    }
+  }
+
+  // 3. Setup Start Menu shortcut
+  if (startMenuShortcut) {
+    try {
+      const startMenuDir = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs');
+      if (!fs.existsSync(startMenuDir)) {
+        fs.mkdirSync(startMenuDir, { recursive: true });
+      }
+      const startMenuPath = path.join(startMenuDir, 'MarkdownReader.lnk');
+      const op = fs.existsSync(startMenuPath) ? 'update' : 'create';
+      shell.writeShortcutLink(startMenuPath, op, {
+        target: exePath,
+        cwd: exeDir,
+        icon: exePath,
+        iconIndex: 0,
+        description: 'MarkdownReader - Fast Markdown Workspace'
+      });
+      results.startMenuShortcut = fs.existsSync(startMenuPath);
+    } catch (e) {
+      console.error('Failed start menu shortcut creation:', e);
+    }
+  }
+
+  // 4. Setup Explorer Context Menu
+  if (contextMenu) {
+    try {
+      // File context menu for .md and .markdown
+      await runReg(['add', 'HKCU\\Software\\Classes\\SystemFileAssociations\\.md\\shell\\MarkdownReader', '/ve', '/d', 'Edit with MarkdownReader', '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\SystemFileAssociations\\.md\\shell\\MarkdownReader', '/v', 'Icon', '/d', `"${exePath}",0`, '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\SystemFileAssociations\\.md\\shell\\MarkdownReader\\command', '/ve', '/d', `"${exePath}" "%1"`, '/f']);
+
+      await runReg(['add', 'HKCU\\Software\\Classes\\SystemFileAssociations\\.markdown\\shell\\MarkdownReader', '/ve', '/d', 'Edit with MarkdownReader', '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\SystemFileAssociations\\.markdown\\shell\\MarkdownReader', '/v', 'Icon', '/d', `"${exePath}",0`, '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\SystemFileAssociations\\.markdown\\shell\\MarkdownReader\\command', '/ve', '/d', `"${exePath}" "%1"`, '/f']);
+
+      // Folder / Directory context menu
+      await runReg(['add', 'HKCU\\Software\\Classes\\Directory\\shell\\MarkdownReader', '/ve', '/d', 'Open Folder in MarkdownReader', '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\Directory\\shell\\MarkdownReader', '/v', 'Icon', '/d', `"${exePath}",0`, '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\Directory\\shell\\MarkdownReader\\command', '/ve', '/d', `"${exePath}" "%V"`, '/f']);
+
+      await runReg(['add', 'HKCU\\Software\\Classes\\Directory\\Background\\shell\\MarkdownReader', '/ve', '/d', 'Open Folder in MarkdownReader', '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\Directory\\Background\\shell\\MarkdownReader', '/v', 'Icon', '/d', `"${exePath}",0`, '/f']);
+      await runReg(['add', 'HKCU\\Software\\Classes\\Directory\\Background\\shell\\MarkdownReader\\command', '/ve', '/d', `"${exePath}" "%V"`, '/f']);
+
+      results.contextMenu = true;
+    } catch (e) {
+      console.error('Failed context menu registry setup:', e);
+    }
+  }
+
+  return { success: true, results };
+});
+
+ipcMain.handle('set-as-default', async () => {
+  const exePath = process.execPath;
+  try {
+    await runReg(['add', 'HKCU\\Software\\Classes\\.md', '/ve', '/d', 'MarkdownReader.Document', '/f']);
+    await runReg(['add', 'HKCU\\Software\\Classes\\.md\\OpenWithProgids', '/v', 'MarkdownReader.Document', '/d', '', '/f']);
+    await runReg(['add', 'HKCU\\Software\\Classes\\.markdown', '/ve', '/d', 'MarkdownReader.Document', '/f']);
+    await runReg(['add', 'HKCU\\Software\\Classes\\.markdown\\OpenWithProgids', '/v', 'MarkdownReader.Document', '/d', '', '/f']);
+    await runReg(['add', 'HKCU\\Software\\Classes\\MarkdownReader.Document', '/ve', '/d', 'Markdown File', '/f']);
+    await runReg(['add', 'HKCU\\Software\\Classes\\MarkdownReader.Document\\DefaultIcon', '/ve', '/d', `"${exePath}",0`, '/f']);
+    await runReg(['add', 'HKCU\\Software\\Classes\\MarkdownReader.Document\\shell\\open\\command', '/ve', '/d', `"${exePath}" "%1"`, '/f']);
+    await runReg(['add', 'HKCU\\Software\\Classes\\Applications\\MarkdownReader.exe\\shell\\open\\command', '/ve', '/d', `"${exePath}" "%1"`, '/f']);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
 });
 

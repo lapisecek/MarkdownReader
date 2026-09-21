@@ -18,5 +18,8 @@ contextBridge.exposeInMainWorld('api', {
   exportToPDF: (options) => ipcRenderer.invoke('export-to-pdf', options),
   saveAssetImage: (data) => ipcRenderer.invoke('save-asset-image', data),
   onWindowStateChange: (callback) => ipcRenderer.on('window-state-change', (_event, state) => callback(state)),
+  checkWindowsIntegration: () => ipcRenderer.invoke('check-windows-integration'),
+  setupWindowsIntegration: (options) => ipcRenderer.invoke('setup-windows-integration', options),
+  onDirectoryLoaded: (callback) => ipcRenderer.on('open-directory', (_event, dirPath) => callback(dirPath)),
 });
 

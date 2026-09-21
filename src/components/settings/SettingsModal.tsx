@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, X, Palette, Pen, Keyboard, Download, Type } from 'lucide-react';
+import { Settings, X, Palette, Pen, Keyboard, Download, Type, Monitor, CheckCircle2, Wrench, RefreshCw, FileText, LayoutGrid, Menu, Check } from 'lucide-react';
 
 export type AppTheme = 'default' | 'ocean' | 'forest' | 'sunset' | 'midnight';
 export type EditorFontFamily = 'sans' | 'mono' | 'serif';
@@ -120,12 +120,58 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   themeColors,
   onOpenExport,
 }) => {
-  const [activeTab, setActiveTab] = useState<'appearance' | 'editor' | 'keybindings' | 'export'>('appearance');
+  const [activeTab, setActiveTab] = useState<'appearance' | 'editor' | 'windows' | 'export' | 'keybindings'>('appearance');
+  const [winStatus, setWinStatus] = useState<any>(null);
+  const [isFixingWin, setIsFixingWin] = useState(false);
+  const [winToastMsg, setWinToastMsg] = useState<string | null>(null);
   const historyRef = useRef<AppSettings[]>([]);
+
+  const checkWinStatus = async () => {
+    if (window.api?.checkWindowsIntegration) {
+      const res = await window.api.checkWindowsIntegration();
+      setWinStatus(res);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'windows') {
+      checkWinStatus();
+    }
+  }, [activeTab]);
+
+  const handleFixAllWin = async () => {
+    setIsFixingWin(true);
+    try {
+      const res = await window.api.setupWindowsIntegration();
+      if (res.success) {
+        await checkWinStatus();
+        setWinToastMsg('All Windows integrations successfully configured!');
+        setTimeout(() => setWinToastMsg(null), 3000);
+      }
+    } catch (err: any) {
+      alert('Error configuring Windows: ' + err.message);
+    } finally {
+      setIsFixingWin(false);
+    }
+  };
+
+  const handleFixSingleWin = async (feature: 'defaultApp' | 'desktopShortcut' | 'startMenuShortcut' | 'contextMenu') => {
+    try {
+      const res = await window.api.setupWindowsIntegration({ [feature]: true });
+      if (res.success) {
+        await checkWinStatus();
+        setWinToastMsg('Feature configured successfully!');
+        setTimeout(() => setWinToastMsg(null), 3000);
+      }
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    }
+  };
 
   const stabs = [
     { id: 'appearance' as const, label: 'Appearance', icon: <Palette size={15} /> },
     { id: 'editor' as const, label: 'Editor', icon: <Pen size={15} /> },
+    { id: 'windows' as const, label: 'Windows', icon: <Monitor size={15} /> },
     { id: 'export' as const, label: 'Export', icon: <Download size={15} /> },
     { id: 'keybindings' as const, label: 'Shortcuts', icon: <Keyboard size={15} /> },
   ];
@@ -292,23 +338,172 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
               <div className="pt-4 mt-2 border-t border-gray-200 dark:border-gray-800">
                 <button
-                  onClick={async () => {
-                    const res = await window.api.setAsDefault();
-                    if (res.success) {
-                      alert('Successfully associated MarkdownReader as the default Windows application for .md files!');
-                    } else {
-                      alert('Failed to register: ' + (res.error || 'Unknown error'));
-                    }
-                  }}
-                  className="w-full py-2.5 rounded-xl text-xs font-semibold transition-all shadow-sm"
+                  onClick={() => setActiveTab('windows')}
+                  className="w-full py-2.5 rounded-xl text-xs font-semibold transition-all shadow-sm flex items-center justify-center gap-2"
                   style={{ backgroundColor: themeColors.accentBg, color: themeColors.accent }}
                 >
-                  Set as Default Windows Markdown App (.md)
+                  <Monitor size={15} />
+                  Manage Windows Integration (File Associations, Shortcuts & Menus)
                 </button>
-                <p className="text-[11px] text-gray-500 mt-2 text-center">
-                  Links Windows Shell and Explorer icon directly to MarkdownReader.
-                </p>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'windows' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold">Windows Ecosystem Integration</h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    Configure file associations, system shortcuts, and Explorer context menus.
+                  </p>
+                </div>
+                <button
+                  onClick={checkWinStatus}
+                  className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-800 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500"
+                  title="Refresh Windows Status"
+                >
+                  <RefreshCw size={14} />
+                </button>
+              </div>
+
+              {winToastMsg && (
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs flex items-center gap-2">
+                  <CheckCircle2 size={16} />
+                  <span>{winToastMsg}</span>
+                </div>
+              )}
+
+              {winStatus && (
+                <div className="space-y-2.5">
+                  {/* Default App */}
+                  <div className="flex items-center justify-between p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-white/[0.02]">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-xl bg-blue-500/10 text-blue-500">
+                        <FileText size={16} />
+                      </div>
+                      <div>
+                        <div className="text-xs font-semibold">Default File Handler (.md, .markdown)</div>
+                        <div className="text-[11px] text-gray-500">Associated in Windows Shell and Registry</div>
+                      </div>
+                    </div>
+                    {winStatus.isDefaultApp ? (
+                      <span className="flex items-center gap-1 text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full">
+                        <Check size={13} /> Active
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleFixSingleWin('defaultApp')}
+                        className="px-3 py-1 rounded-lg text-xs font-semibold shadow-sm transition-all text-white"
+                        style={{ backgroundColor: themeColors.accent }}
+                      >
+                        Set Default
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Desktop Shortcut */}
+                  <div className="flex items-center justify-between p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-white/[0.02]">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-xl bg-purple-500/10 text-purple-500">
+                        <Monitor size={16} />
+                      </div>
+                      <div>
+                        <div className="text-xs font-semibold">Desktop Shortcut</div>
+                        <div className="text-[11px] text-gray-500">MarkdownReader icon on user's Desktop</div>
+                      </div>
+                    </div>
+                    {winStatus.hasDesktopShortcut ? (
+                      <span className="flex items-center gap-1 text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full">
+                        <Check size={13} /> Active
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleFixSingleWin('desktopShortcut')}
+                        className="px-3 py-1 rounded-lg text-xs font-semibold shadow-sm transition-all text-white"
+                        style={{ backgroundColor: themeColors.accent }}
+                      >
+                        Create Icon
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Start Menu Shortcut */}
+                  <div className="flex items-center justify-between p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-white/[0.02]">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500">
+                        <LayoutGrid size={16} />
+                      </div>
+                      <div>
+                        <div className="text-xs font-semibold">Start Menu Programs</div>
+                        <div className="text-[11px] text-gray-500">Searchable from Windows Start menu</div>
+                      </div>
+                    </div>
+                    {winStatus.hasStartMenuShortcut ? (
+                      <span className="flex items-center gap-1 text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full">
+                        <Check size={13} /> Active
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleFixSingleWin('startMenuShortcut')}
+                        className="px-3 py-1 rounded-lg text-xs font-semibold shadow-sm transition-all text-white"
+                        style={{ backgroundColor: themeColors.accent }}
+                      >
+                        Add to Start
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Context Menu */}
+                  <div className="flex items-center justify-between p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-white/[0.02]">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500">
+                        <Menu size={16} />
+                      </div>
+                      <div>
+                        <div className="text-xs font-semibold">Windows Explorer Context Menu</div>
+                        <div className="text-[11px] text-gray-500">Right-click "Edit with MarkdownReader" & "Open Folder"</div>
+                      </div>
+                    </div>
+                    {winStatus.hasContextMenu ? (
+                      <span className="flex items-center gap-1 text-xs font-medium text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-full">
+                        <Check size={13} /> Active
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleFixSingleWin('contextMenu')}
+                        className="px-3 py-1 rounded-lg text-xs font-semibold shadow-sm transition-all text-white"
+                        style={{ backgroundColor: themeColors.accent }}
+                      >
+                        Register
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="pt-3 flex flex-col gap-2">
+                    <button
+                      onClick={handleFixAllWin}
+                      disabled={isFixingWin}
+                      className="w-full py-2.5 rounded-xl text-xs font-semibold text-white transition-all shadow-sm flex items-center justify-center gap-2"
+                      style={{ backgroundColor: themeColors.accent }}
+                    >
+                      <Wrench size={15} />
+                      {isFixingWin ? 'Applying Configurations...' : 'Configure All Windows Features (1-Click)'}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        localStorage.removeItem('mdreader-hide-windows-setup');
+                        setWinToastMsg('Windows Setup Assistant popup reminder reset! It will appear if any item is unconfigured.');
+                        setTimeout(() => setWinToastMsg(null), 4000);
+                      }}
+                      className="py-1.5 text-[11px] text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 transition-colors text-center"
+                    >
+                      Reset Bottom-Right Setup Popup Reminder
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

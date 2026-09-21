@@ -31,6 +31,7 @@ import { MathInline, MathBlock } from './extensions/MathExtension';
 import { FullscreenImageViewer } from './components/FullscreenImageViewer';
 import { SettingsModal, type AppSettings, DEFAULT_SETTINGS, THEME_COLORS } from './components/settings/SettingsModal';
 import { ExportModal } from './components/editor/ExportModal';
+import { WindowsIntegrationToast } from './components/WindowsIntegrationToast';
 import { renderMermaidDiagrams } from './utils/renderMermaid';
 import appIconImg from '../icon.ico';
 
@@ -61,6 +62,22 @@ declare global {
       exportToPDF: (options: { defaultName?: string, pageSize?: string }) => Promise<{ success: boolean, filePath?: string, error?: string, canceled?: boolean }>;
       saveAssetImage: (data: { base64Data: string, activeFilePath: string | null, fileName?: string }) => Promise<{ success: boolean, relativePath?: string, fullPath?: string, error?: string }>;
       onWindowStateChange: (callback: (state: { isMaximized: boolean }) => void) => void;
+      checkWindowsIntegration: () => Promise<{
+        isSupported: boolean;
+        isDefaultApp: boolean;
+        hasDesktopShortcut: boolean;
+        hasStartMenuShortcut: boolean;
+        hasContextMenu: boolean;
+        allConfigured: boolean;
+        error?: string;
+      }>;
+      setupWindowsIntegration: (options?: {
+        defaultApp?: boolean;
+        desktopShortcut?: boolean;
+        startMenuShortcut?: boolean;
+        contextMenu?: boolean;
+      }) => Promise<{ success: boolean; results: any; error?: string }>;
+      onDirectoryLoaded: (callback: (dirPath: string) => void) => void;
     }
   }
 }
@@ -695,6 +712,12 @@ function App() {
       } else {
         window.api.closeWindowConfirmed();
       }
+    });
+    window.api.onDirectoryLoaded((dirPath) => {
+      console.log("Renderer received directory-loaded:", dirPath);
+      setRootDir(dirPath);
+      loadDir(dirPath);
+      setIsSidebarOpen(true);
     });
     window.api.rendererReady();
   }, [settings.defaultMode]);
@@ -1439,6 +1462,14 @@ function App() {
       {fullscreenImage && (
         <FullscreenImageViewer src={fullscreenImage} onClose={() => setFullscreenImage(null)} />
       )}
+      <WindowsIntegrationToast
+        themeAccent={themeColors.accent}
+        isDark={dk}
+        onToast={(msg) => {
+          setToastMessage(msg);
+          setTimeout(() => setToastMessage(null), 3000);
+        }}
+      />
       {toastMessage && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[400] px-4 py-2 rounded-full shadow-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-black text-sm font-medium animate-fade-in pointer-events-none">
           {toastMessage}

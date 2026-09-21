@@ -34,6 +34,15 @@
 - **Accent Color & Theme Selector**: Dynamic themes (Zinc, Cobalt, Emerald, Violet, Rose, Amber).
 - **Editor Tuning**: Fine-tune font size, line height, max reading width, spell check, and auto-save interval.
 
+### 🪟 Windows Setup Assistant & Integration Center
+- **Bottom-Right Setup Assistant Popup**: Automatically detects on launch if MarkdownReader is missing system integrations, appearing gracefully in the lower-right corner.
+- **1-Click Full Windows Setup**: Easily configure everything in one tap:
+  - **Default File Associations**: Registers `.md` and `.markdown` in the Windows registry with icon stamping.
+  - **Desktop Shortcut**: Creates a high-res desktop launcher.
+  - **Start Menu Programs**: Adds MarkdownReader to the Windows Start Menu and Windows Search index.
+  - **Explorer Right-Click Context Menu**: Adds "Edit with MarkdownReader" on `.md` files and "Open Folder in MarkdownReader" on directories.
+- **Dedicated Windows Settings Tab**: Full status dashboard in the Settings modal with individual toggles and repair actions.
+
 ### 🎨 Windows Ecosystem Polish & Brand Identity
 - **New Multi-Resolution Icon**: Crafted from the new high-resolution logo, embedding 7 distinct Windows mipmaps (16x16, 24x24, 32x32, 48x48, 64x64, 128x128, 256x256) for crisp rendering across Windows 11/10 Taskbar, Start Menu, Alt-Tab switcher, and File Explorer.
 - **AppUserModelId**: Registered as `com.adamk.markdownreader` for Windows notification routing, taskbar pinning, and jumplists.

@@ -15,10 +15,12 @@ A modern, fast, and feature-complete Windows desktop Markdown workspace built wi
 - **🖼️ Smart Asset Pipeline**: Paste screenshots from clipboard (`Ctrl+V`) or drag-and-drop local image files; images are automatically organized into `./assets/` relative directories.
 - **🔍 Fullscreen Image Lightbox**: Smooth mouse-wheel zooming towards cursor and middle-click panning for inspecting large diagrams and screenshots.
 - **🗂️ Tabbed Multi-Document Workspace & Explorer**: Work across multiple open tabs and explore project directories seamlessly.
-- **🎨 Windows Ecosystem Integration**:
+- **🪟 Windows Setup Assistant & Deep Ecosystem Integration**:
+  - Floating bottom-right setup assistant card automatically alerts if file associations, desktop shortcuts, or context menus are missing.
+  - 1-Click setup for Default `.md` & `.markdown` file association, Desktop shortcut, Start Menu shortcut, and Explorer right-click context menu ("Edit with MarkdownReader" & "Open Folder in MarkdownReader").
+  - Dedicated "Windows" integration dashboard inside Settings.
   - Multi-resolution Windows ICO (16x16 to 256x256) for crisp Taskbar, Alt+Tab, and File Explorer presentation.
   - Windows `AppUserModelId` (`com.adamk.markdownreader`) for native taskbar pinning and window grouping.
-  - Native file associations for `.md` and `.markdown` files.
   - Modern frameless titlebar with double-click maximize/restore and custom window controls.
 - **⚙️ Customization & Themes**:
   - Choose between Sans, Monospace, and Serif typography.
@@ -37,10 +39,10 @@ A modern, fast, and feature-complete Windows desktop Markdown workspace built wi
 2. Extract the `MarkdownReader-win32-x64.zip` archive or run the installer.
 3. Launch `MarkdownReader.exe`.
 
-### Setting as Default Markdown Viewer on Windows
+### Windows Setup & Integration
 
-- Open MarkdownReader and navigate to **Settings** (`Ctrl+,`) > **Set as Default (.md)**.
-- Or right-click any `.md` file in Windows Explorer -> **Open with** -> **Choose another app** -> Select **MarkdownReader** and check **Always use this app to open .md files**.
+- On launch, the **Windows Setup Assistant** will gracefully appear in the bottom-right corner if your system integrations are not yet configured. Simply click **"Fix All & Apply"** for instant 1-click setup!
+- You can also inspect and configure each feature at any time via **Settings** (`Ctrl+,`) > **Windows**.
 
 ---
 
