@@ -21,7 +21,8 @@
   - Added live scaled paper preview with real-time zoom controls.
   - Page format options (A4, Letter, A3, Legal, Tabloid), orientation, margin presets, scale (60%–140%), themes, and headers/footers.
 - **🎨 Custom Color Theme**: Interactive color picker in Settings with curated swatches, hex input, and native color selector.
-- **🔤 Installed Windows System Fonts**: Searchable font selector querying all locally installed Windows fonts with live previews.
+- **🔤 Real-Time Font Application & System Font Discovery**: Preset fonts (Sans, Mono, Serif) and installed Windows system fonts now apply reactively to the entire document in real-time with an active live font preview. Fixed Windows system font registry enumeration in the main process.
+- **🚪 Clean App Close Without False Dialog Flash**: Added mount stabilization and smart tab checking so closing clean documents exits instantaneously (<5ms) without flashing the unsaved changes dialog.
 - **🛠️ Automated Build & Instant Start Menu Deployment**: Build script automatically cleans previous builds, terminates locks, compiles the fresh binary, and updates the Windows Start Menu and Desktop shortcuts for instant testing.
 
 ---
