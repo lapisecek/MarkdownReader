@@ -49,6 +49,25 @@ export const DEFAULT_SETTINGS: AppSettings = {
   defaultMode: 'smart',
 };
 
+export const resolveFontFamily = (settings: AppSettings): string => {
+  if (settings.fontFamily === 'custom' && settings.customFontFamily) {
+    return `"${settings.customFontFamily}", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+  }
+  if (settings.fontFamily === 'mono') {
+    return 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+  }
+  if (settings.fontFamily === 'serif') {
+    return 'Georgia, Cambria, "Times New Roman", Times, serif';
+  }
+  if (settings.fontFamily === 'sans') {
+    return 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  }
+  if (settings.customFontFamily) {
+    return `"${settings.customFontFamily}", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+  }
+  return 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+};
+
 export const THEME_COLORS: Record<Exclude<AppTheme, 'custom'>, { accent: string, accentBg: string, label: string }> = {
   default: { accent: '#3b82f6', accentBg: 'rgba(59,130,246,0.12)', label: 'Default Blue' },
   ocean: { accent: '#06b6d4', accentBg: 'rgba(6,182,212,0.12)', label: 'Ocean Cyan' },
@@ -454,6 +473,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <span className="truncate max-w-[80px]">{settings.customFontFamily || 'Installed...'}</span>
                       <ChevronDown size={12} className={`transition-transform ${isFontDropdownOpen ? 'rotate-180' : ''}`} />
                     </button>
+                  </div>
+
+                  {/* Active Font Live Preview */}
+                  <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 dark:bg-[#1e1e1e] border border-gray-200 dark:border-gray-800 text-xs">
+                    <span className="font-semibold text-[10px] text-gray-400 uppercase tracking-wider shrink-0 mr-2">
+                      Active: {settings.fontFamily === 'custom' ? (settings.customFontFamily || 'Custom') : settings.fontFamily.toUpperCase()}
+                    </span>
+                    <span style={{ fontFamily: resolveFontFamily(settings) }} className="text-sm truncate max-w-[320px] text-gray-800 dark:text-gray-200">
+                      The quick brown fox jumps over the lazy dog. 12345
+                    </span>
                   </div>
 
                   {/* System Fonts Dropdown Menu with Search Bar */}

@@ -184,13 +184,13 @@ function createWindow() {
       e.preventDefault();
       mainWindow.webContents.send('app-close-request');
       if (closeTimeout) clearTimeout(closeTimeout);
-      // Failsafe: if renderer takes > 800ms, force close cleanly so app never hangs in background
+      // Failsafe: if renderer is unresponsive or crashed, force close cleanly after 4000ms
       closeTimeout = setTimeout(() => {
         isSafeToClose = true;
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.destroy();
         }
-      }, 800);
+      }, 4000);
     }
   });
 
@@ -551,7 +551,7 @@ ipcMain.handle('get-system-fonts', async () => {
               resolve([]);
             } else {
               const list = stdout
-                .split(/\\r?\\n/)
+                .split(/\r?\n/)
                 .map(f => f.trim())
                 .filter(f => f && !f.startsWith('@'));
               resolve(Array.from(new Set(list)).sort((a, b) => a.localeCompare(b)));

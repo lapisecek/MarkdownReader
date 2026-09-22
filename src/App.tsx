@@ -30,7 +30,7 @@ import { DefList, DefTerm, DefDescription } from './extensions/DefList';
 import { Emoji } from './extensions/Emoji';
 import { MathInline, MathBlock } from './extensions/MathExtension';
 import { FullscreenImageViewer } from './components/FullscreenImageViewer';
-import { SettingsModal, type AppSettings, DEFAULT_SETTINGS, THEME_COLORS } from './components/settings/SettingsModal';
+import { SettingsModal, type AppSettings, DEFAULT_SETTINGS, THEME_COLORS, resolveFontFamily } from './components/settings/SettingsModal';
 import { ExportModal } from './components/editor/ExportModal';
 import { WindowsIntegrationToast } from './components/WindowsIntegrationToast';
 import { renderMermaidDiagrams } from './utils/renderMermaid';
@@ -183,20 +183,21 @@ const getParentDirectory = (dirPath: string) => {
  * ============================================================================
  */
 
-const resolveFontFamily = (settings: AppSettings) => {
-  if (settings.customFontFamily) {
-    return `"${settings.customFontFamily}", system-ui, -apple-system, sans-serif`;
-  }
-  if (settings.fontFamily === 'mono') {
-    return 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
-  }
-  if (settings.fontFamily === 'serif') {
-    return 'Georgia, Cambria, "Times New Roman", Times, serif';
-  }
-  return 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-};
-
 const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorReady, onSelectionUpdate, onProcessing, settings }: any) => {
+  const initialContentRef = useRef<string>(tab.content);
+  const isInitializedRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    initialContentRef.current = tab.content;
+  }, [tab.content]);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      isInitializedRef.current = true;
+    }, 150);
+    return () => clearTimeout(t);
+  }, []);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ codeBlock: false, heading: false, link: false }),
@@ -229,8 +230,14 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
     ],
     content: tab.content,
     editable: !tab.isReadOnly,
-    onUpdate: ({ transaction }: any) => {
-      setUnsaved(tab.id, true);
+    onUpdate: ({ editor: ed, transaction }: any) => {
+      if (!isInitializedRef.current) return;
+      if (!transaction || !transaction.docChanged) return;
+
+      const currentMd = ed?.storage?.markdown?.getMarkdown ? ed.storage.markdown.getMarkdown() : '';
+      const isDirty = currentMd !== initialContentRef.current;
+      setUnsaved(tab.id, isDirty);
+
       const isLargeChange = transaction && transaction.steps && transaction.steps.some((s: any) => {
         if (s.slice?.content?.size > 1000) return true;
         if (s.from !== undefined && s.to !== undefined && Math.abs(s.to - s.from) > 1000) return true;
@@ -253,7 +260,7 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
     editorProps: {
       attributes: {
         class: `prose dark:prose-invert max-w-none focus:outline-none min-h-[calc(100vh-150px)] px-12 pt-6 pb-32 ${tab.isReadOnly ? 'cursor-default' : ''}`,
-        style: `font-size: ${settings.fontSize}px; line-height: ${settings.lineHeight}; font-family: ${resolveFontFamily(settings)}`,
+        style: `font-size: ${settings.fontSize}px; line-height: ${settings.lineHeight}; font-family: var(--editor-font-family)`,
         spellcheck: settings.spellCheck ? 'true' : 'false',
       },
       handleDOMEvents: {
@@ -440,9 +447,10 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
   useEffect(() => {
     if (!editor?.view?.dom) return;
     const dom = editor.view.dom;
-    dom.style.fontSize = `${settings.fontSize}px`;
-    dom.style.lineHeight = `${settings.lineHeight}`;
-    dom.style.fontFamily = resolveFontFamily(settings);
+    const font = resolveFontFamily(settings);
+    dom.style.setProperty('font-family', font, 'important');
+    dom.style.setProperty('font-size', `${settings.fontSize}px`, 'important');
+    dom.style.setProperty('line-height', `${settings.lineHeight}`, 'important');
     if (!settings.wordWrap) {
       dom.style.whiteSpace = 'pre';
       dom.style.overflowX = 'auto';
@@ -615,7 +623,10 @@ function App() {
   useEffect(() => { 
     document.documentElement.style.setProperty('--accent-color', themeColors.accent);
     document.documentElement.style.setProperty('--accent-bg', themeColors.accentBg);
-  }, [themeColors.accent, themeColors.accentBg]);
+    document.documentElement.style.setProperty('--editor-font-family', resolveFontFamily(settings));
+    document.documentElement.style.setProperty('--editor-font-size', `${settings.fontSize}px`);
+    document.documentElement.style.setProperty('--editor-line-height', `${settings.lineHeight}`);
+  }, [themeColors.accent, themeColors.accentBg, settings.fontFamily, settings.customFontFamily, settings.fontSize, settings.lineHeight]);
 
   useEffect(() => {
     const handleImage = (e: any) => setFullscreenImage(e.detail);
@@ -848,8 +859,17 @@ function App() {
       });
     });
     window.api.onAppCloseRequest(async () => {
-      const unsaved = tabsRef.current.filter(t => t.isUnsaved);
+      const unsaved = tabsRef.current.filter(t => {
+        if (!t.isUnsaved) return false;
+        if (!t.filePath) {
+          const ed = editorsRef.current[t.id];
+          const md = ed?.storage?.markdown?.getMarkdown ? ed.storage.markdown.getMarkdown() : (t.content || '');
+          if (!md || !md.trim()) return false;
+        }
+        return true;
+      });
       if (unsaved.length > 0) {
+        window.api.cancelAppClose();
         setShowCloseDialog(true);
       } else {
         window.api.closeWindowConfirmed();
@@ -868,12 +888,14 @@ function App() {
   const handleCloseSaveAll = async () => {
     const unsaved = tabs.filter(t => t.isUnsaved);
     for (const t of unsaved) {
+      const editor = editorsRef.current[t.id];
+      const contentToSave = editor ? editor.storage.markdown.getMarkdown() : t.content;
       if (t.filePath) {
         markFileAsAppCreated(t.filePath);
-        await window.api.saveFile({ filePath: t.filePath, content: t.content });
+        await window.api.saveFile({ filePath: t.filePath, content: contentToSave });
       } else {
         const defaultPath = currentDir ? `${currentDir}\\${t.fileName}` : t.fileName;
-        const res = await window.api.saveAsFile({ content: t.content, defaultName: defaultPath });
+        const res = await window.api.saveAsFile({ content: contentToSave, defaultName: defaultPath });
         if (res.success && res.filePath) {
           markFileAsAppCreated(res.filePath);
         }

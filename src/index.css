@@ -53,7 +53,15 @@
 ::-webkit-scrollbar-corner { background: transparent; }
 
 /* Tiptap */
-.ProseMirror { @apply outline-none min-h-full pb-32 leading-relaxed; }
+.ProseMirror {
+  @apply outline-none min-h-full pb-32 leading-relaxed;
+  font-family: var(--editor-font-family, system-ui, -apple-system, sans-serif) !important;
+}
+
+.ProseMirror *:not(code):not(pre):not(pre *):not([class*="katex"]):not([class*="mermaid"]) {
+  font-family: inherit !important;
+}
+
 .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder); float: left; color: var(--text-muted); pointer-events: none; height: 0;
 }
