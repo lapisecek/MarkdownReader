@@ -39,7 +39,10 @@
     @apply h-full w-full overflow-hidden;
     background-color: var(--bg-color);
     color: var(--text-color);
-    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: var(--app-font-family, 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif);
+  }
+  button, input, textarea, select {
+    font-family: inherit;
   }
   body.resizing, body.resizing * { transition: none !important; }
   ::selection { background: var(--selection-bg); }
@@ -224,9 +227,16 @@ input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.15); }
 input[type="range"]::-webkit-slider-thumb:active { transform: scale(1.05); }
 
 /* Settings tab content animation */
-.settings-content-enter { animation: stFade 0.2s cubic-bezier(0.16,1,0.3,1); }
+.settings-content-enter { animation: stFade var(--anim-duration, 0.2s) cubic-bezier(0.16,1,0.3,1); }
 @keyframes stFade { from { opacity: 0; transform: translateX(6px); } to { opacity: 1; transform: translateX(0); } }
 @keyframes settingsAppear { from { opacity: 0; transform: scale(0.95) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.animate-fade-in {
+  animation: fadeIn var(--anim-duration, 0.2s) cubic-bezier(0.16, 1, 0.3, 1);
+}
+.animate-in {
+  animation-duration: var(--anim-duration, 150ms) !important;
+}
 
 /* Settings tab button */
 .settings-tab { @apply px-4 py-2 text-sm font-medium rounded-lg cursor-pointer transition-colors; }

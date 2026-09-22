@@ -19,6 +19,7 @@ export interface AppSettings {
   autoSave: boolean;
   autoSaveInterval: number;
   animationsEnabled: boolean;
+  animationSpeed: number;
   showStatusBar: boolean;
   sidebarWidth: number;
   spellCheck: boolean;
@@ -27,6 +28,7 @@ export interface AppSettings {
   customFontFamily: string;
   customAccentColor: string;
   defaultMode: DefaultEditorMode;
+  applyFontToUI: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -39,6 +41,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoSave: false,
   autoSaveInterval: 30,
   animationsEnabled: true,
+  animationSpeed: 1.0,
   showStatusBar: true,
   sidebarWidth: 260,
   spellCheck: false,
@@ -47,6 +50,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   customFontFamily: '',
   customAccentColor: '#8b5cf6',
   defaultMode: 'smart',
+  applyFontToUI: false,
 };
 
 export const resolveFontFamily = (settings: AppSettings): string => {
@@ -482,6 +486,43 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <Toggle checked={settings.animationsEnabled} onChange={v => handleUpdate({ animationsEnabled: v })} />
                 </SettingRow>
 
+                {settings.animationsEnabled && (
+                  <SettingRow
+                    label="Animation Speed Multiplier"
+                    desc={`${(settings.animationSpeed ?? 1.0).toFixed(2)}x (${(settings.animationSpeed ?? 1.0) >= 2.5 ? 'Ultra Fast' : (settings.animationSpeed ?? 1.0) >= 1.5 ? 'Fast & Snappy' : (settings.animationSpeed ?? 1.0) <= 0.75 ? 'Relaxed' : 'Normal'})`}
+                  >
+                    <div className="flex flex-col items-end gap-2 w-56">
+                      <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg text-[10px] font-semibold w-full">
+                        {[0.5, 1.0, 1.5, 2.0, 3.0].map(s => {
+                          const isCur = Math.abs((settings.animationSpeed ?? 1.0) - s) < 0.05;
+                          return (
+                            <button
+                              key={s}
+                              onClick={() => handleUpdate({ animationSpeed: s })}
+                              className={`flex-1 py-1 rounded transition-all ${
+                                isCur
+                                  ? 'bg-white dark:bg-[#121212] shadow-xs font-bold'
+                                  : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+                              }`}
+                              style={isCur ? { color: themeColors.accent } : {}}
+                            >
+                              {s}x
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <RangeSlider
+                        min={0.25}
+                        max={3.0}
+                        step={0.25}
+                        value={settings.animationSpeed ?? 1.0}
+                        onChange={(e: any) => handleUpdate({ animationSpeed: +e.target.value })}
+                        accent={themeColors.accent}
+                      />
+                    </div>
+                  </SettingRow>
+                )}
+
                 <SettingRow label="Word & Character Count" desc="Display document metrics in the bottom status bar">
                   <Toggle checked={settings.showStatusBar} onChange={v => handleUpdate({ showStatusBar: v })} />
                 </SettingRow>
@@ -698,6 +739,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz
                       </div>
                     </div>
+                  </div>
+
+                  <div className="pt-1 border-t border-gray-200 dark:border-gray-800">
+                    <SettingRow
+                      label="Apply Font to Entire App UI"
+                      desc="Extend the selected font to all application tabs, sidebar, toolbars, and menus"
+                    >
+                      <Toggle checked={settings.applyFontToUI} onChange={v => handleUpdate({ applyFontToUI: v })} />
+                    </SettingRow>
                   </div>
                 </div>
               </div>

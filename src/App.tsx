@@ -616,7 +616,13 @@ function App() {
   }, [settings.theme, settings.customAccentColor]);
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
   const isReading = activeTab.isReadOnly;
-  const tr = (settings.animationsEnabled && !isInitializing) ? 'all 0.25s cubic-bezier(0.4,0,0.2,1)' : 'none';
+  const speed = settings.animationsEnabled ? (settings.animationSpeed ?? 1.0) : 0;
+  const animDurationSec = (settings.animationsEnabled && !isInitializing && speed > 0)
+    ? `${(0.25 / speed).toFixed(3)}s`
+    : '0s';
+  const tr = (settings.animationsEnabled && !isInitializing && speed > 0)
+    ? `all ${animDurationSec} cubic-bezier(0.4,0,0.2,1)`
+    : 'none';
   const dk = settings.isDark;
 
   // Apply dark mode and theme colors to the document body
@@ -624,10 +630,22 @@ function App() {
   useEffect(() => { 
     document.documentElement.style.setProperty('--accent-color', themeColors.accent);
     document.documentElement.style.setProperty('--accent-bg', themeColors.accentBg);
-    document.documentElement.style.setProperty('--editor-font-family', resolveFontFamily(settings));
+    const font = resolveFontFamily(settings);
+    document.documentElement.style.setProperty('--editor-font-family', font);
     document.documentElement.style.setProperty('--editor-font-size', `${settings.fontSize}px`);
     document.documentElement.style.setProperty('--editor-line-height', `${settings.lineHeight}`);
-  }, [themeColors.accent, themeColors.accentBg, settings.fontFamily, settings.customFontFamily, settings.fontSize, settings.lineHeight]);
+    if (settings.applyFontToUI) {
+      document.documentElement.style.setProperty('--app-font-family', font);
+      document.body.style.fontFamily = font;
+    } else {
+      document.documentElement.style.setProperty('--app-font-family', "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif");
+      document.body.style.fontFamily = "'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif";
+    }
+    const animSpeed = settings.animationsEnabled ? (settings.animationSpeed ?? 1.0) : 0;
+    const durationMs = animSpeed > 0 ? Math.round(250 / animSpeed) : 0;
+    document.documentElement.style.setProperty('--anim-duration', `${durationMs}ms`);
+    document.documentElement.style.setProperty('--anim-speed-multiplier', `${animSpeed}`);
+  }, [themeColors.accent, themeColors.accentBg, settings.fontFamily, settings.customFontFamily, settings.fontSize, settings.lineHeight, settings.animationsEnabled, settings.animationSpeed, settings.applyFontToUI]);
 
   useEffect(() => {
     const handleImage = (e: any) => setFullscreenImage(e.detail);
@@ -1570,7 +1588,7 @@ function App() {
       {showCloseDialog && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-[#1e1e1e] w-full max-w-sm rounded-xl flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden shadow-2xl"
-            style={{ animation: settings.animationsEnabled ? 'settingsAppear 0.2s cubic-bezier(0.16,1,0.3,1)' : 'none' }}>
+            style={{ animation: settings.animationsEnabled ? 'settingsAppear var(--anim-duration, 0.2s) cubic-bezier(0.16,1,0.3,1)' : 'none' }}>
             <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616]">
               <div className="p-1.5 rounded-full" style={{ backgroundColor: themeColors.accentBg, color: themeColors.accent }}><Save size={16} /></div>
               <h2 className="text-sm font-semibold">Unsaved Changes</h2>
@@ -1596,7 +1614,7 @@ function App() {
       {activePrompt && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
           <div className="bg-white dark:bg-[#1e1e1e] w-full max-w-md rounded-xl flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden shadow-2xl animate-fade-in"
-            style={{ animation: settings.animationsEnabled ? 'settingsAppear 0.2s cubic-bezier(0.16,1,0.3,1)' : 'none' }}>
+            style={{ animation: settings.animationsEnabled ? 'settingsAppear var(--anim-duration, 0.2s) cubic-bezier(0.16,1,0.3,1)' : 'none' }}>
             <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#161616]">
               <div className="p-1.5 rounded-full flex items-center justify-center" style={{ backgroundColor: themeColors.accentBg, color: themeColors.accent }}>
                 {activePrompt.type === 'link' ? <Link2 size={16} /> : activePrompt.type === 'image' ? <ImageIcon size={16} /> : <Asterisk size={16} />}
@@ -1710,7 +1728,7 @@ const TB = ({ e, a, args, on, icon, t, ac, dk, dis, onClick }: any) => (
 
 const FAB = ({ onClick, icon, title, on, accent, bg, dk, anim }: any) => (
   <button onClick={onClick} className="p-2.5 rounded-full backdrop-blur-md shadow-lg flex items-center justify-center"
-    style={{ backgroundColor: on ? bg : (dk ? 'rgba(30,30,30,0.85)' : 'rgba(255,255,255,0.85)'), color: on ? accent : (dk ? '#888' : '#52525b'), border: `1px solid ${on ? accent + '40' : (dk ? '#27272a' : '#ddd')}`, transition: anim ? 'all 0.2s ease' : 'none' }}
+    style={{ backgroundColor: on ? bg : (dk ? 'rgba(30,30,30,0.85)' : 'rgba(255,255,255,0.85)'), color: on ? accent : (dk ? '#888' : '#52525b'), border: `1px solid ${on ? accent + '40' : (dk ? '#27272a' : '#ddd')}`, transition: anim ? 'all var(--anim-duration, 0.2s) ease' : 'none' }}
     onMouseEnter={e => { if (anim) e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.color = accent; }}
     onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.color = on ? accent : (dk ? '#888' : '#52525b'); }} title={title}>{icon}</button>
 );

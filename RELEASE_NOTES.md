@@ -1,5 +1,29 @@
 # MarkdownReader Release Notes
 
+## 🚀 MarkdownReader v2.0.2 Release Notes
+
+**MarkdownReader v2.0.2** introduces fine-grained animation control with an animation speed multiplier, an application-wide typography toggle, live font previewing enhancements, and a complete professional documentation overhaul.
+
+### 🌟 What's New in v2.0.2
+- **⚡ Animation Speed Multiplier (0.25x – 3.0x)**:
+  - Added a dedicated Animation Speed Multiplier under Settings > Appearance.
+  - Quick-select pills for `0.5x`, `1.0x`, `1.5x`, `2.0x`, and `3.0x` alongside a smooth granular range slider (`0.25x` to `3.0x`).
+  - Seamlessly scales CSS transitions, sidebar folding, tab animations, dialog appearances, floating action buttons, and notification toasts.
+  - Setting the multiplier to ultra-fast (`2x`–`3x`) makes the interface feel snappy and instant.
+- **🔤 Apply Selected Font to Entire App UI**:
+  - Added a toggle under Settings > Appearance > Typography: *"Apply Font to Entire App UI"*.
+  - When enabled, your chosen typeface (preset or installed Windows system font) extends beyond the markdown editor to all application chrome: sidebar file tree, tabs bar, top and bottom toolbars, dialogs, and menus.
+  - When disabled, keeps clean native Windows system typography (`Segoe UI`) for chrome while isolating custom typography to the editor.
+- **👁️ Live Pangram & Hover Font Previewing**:
+  - Interactive pangram preview card updating in real time with font size, line spacing, and typeface.
+  - Hovering any system font in the search results temporarily previews the font in real time before selection.
+- **📖 Complete Professional Documentation Overhaul**:
+  - Completely redesigned `README.md` with sleek badges, visual feature breakdowns, comprehensive keyboard shortcuts cheatsheet, architectural diagrams, and build instructions.
+- **🛠️ Automated Windows Deployment**:
+  - Builds pristine `v2.0.2` portable distribution archive and automatically updates the Windows Start Menu shortcut.
+
+---
+
 ## 🚀 MarkdownReader v2.0.1 Release Notes
 
 **MarkdownReader v2.0.1** brings major performance optimizations, isolated publication studio, white-flash elimination, smart reading/editing modes, and extensive customization options.
