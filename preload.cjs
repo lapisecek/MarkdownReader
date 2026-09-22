@@ -28,7 +28,9 @@ contextBridge.exposeInMainWorld('api', {
   maximizeWindow: () => ipcRenderer.send('maximize-window'),
   closeWindow: () => ipcRenderer.send('close-window'),
   setAsDefault: () => ipcRenderer.invoke('set-as-default'),
-  exportToPDF: (options) => ipcRenderer.invoke('export-to-pdf', options),
+  exportToPDF: (data) => ipcRenderer.invoke('export-to-pdf', data),
+  printDocument: (data) => ipcRenderer.invoke('print-document', data),
+  getSystemFonts: () => ipcRenderer.invoke('get-system-fonts'),
   saveAssetImage: (data) => ipcRenderer.invoke('save-asset-image', data),
   onWindowStateChange: (callback) => {
     if (windowStateChangeHandler) ipcRenderer.removeListener('window-state-change', windowStateChangeHandler);

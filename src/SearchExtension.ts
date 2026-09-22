@@ -57,39 +57,52 @@ export const SearchExtension = Extension.create<SearchOptions>({
           init() {
             return DecorationSet.empty;
           },
-          apply(tr, _oldState) {
-            // Check if we have a search term change
+          apply(tr, oldSet) {
             const meta = tr.getMeta(SearchPluginKey);
             const term = meta !== undefined ? meta.searchTerm : extensionThis.options.searchTerm;
             const activeIndex = meta !== undefined ? meta.activeMatchIndex : extensionThis.options.activeMatchIndex;
 
-            if (!term) return DecorationSet.empty;
+            if (!term || !term.trim()) return DecorationSet.empty;
 
+            // If neither search metadata changed nor document content changed, reuse existing decorations
+            if (meta === undefined && !tr.docChanged) {
+              return oldSet;
+            }
+
+            // If document changed but search term did not, and we have existing decorations, map them if possible
+            // but if meta explicitly changed, recalculate
             const doc = tr.doc;
             const decorations: Decoration[] = [];
             let index = 0;
+            const maxMatches = 500; // Guard against freezing on massive documents with short queries
 
-            const regex = new RegExp(
-              term.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'),
-              'gi'
-            );
+            try {
+              const regex = new RegExp(
+                term.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'),
+                'gi'
+              );
 
-            doc.descendants((node, pos) => {
-              if (node.isText && node.text) {
-                let match;
-                regex.lastIndex = 0; // Reset just in case
-                while ((match = regex.exec(node.text)) !== null) {
-                  const start = pos + match.index;
-                  const end = start + match[0].length;
-                  decorations.push(
-                    Decoration.inline(start, end, {
-                      class: index === activeIndex ? 'search-result search-result-active' : 'search-result',
-                    })
-                  );
-                  index++;
+              doc.descendants((node, pos) => {
+                if (index >= maxMatches) return false;
+                if (node.isText && node.text) {
+                  let match;
+                  regex.lastIndex = 0;
+                  while ((match = regex.exec(node.text)) !== null) {
+                    if (index >= maxMatches) break;
+                    const start = pos + match.index;
+                    const end = start + match[0].length;
+                    decorations.push(
+                      Decoration.inline(start, end, {
+                        class: index === activeIndex ? 'search-result search-result-active' : 'search-result',
+                      })
+                    );
+                    index++;
+                  }
                 }
-              }
-            });
+              });
+            } catch (e) {
+              return DecorationSet.empty;
+            }
 
             return DecorationSet.create(doc, decorations);
           },

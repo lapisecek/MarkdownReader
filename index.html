@@ -1,12 +1,38 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark" style="background-color: #121212; color: #f0f0f0;">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>markdownreader</title>
+    <title>MarkdownReader</title>
+    <style>
+      html, body, #app {
+        background-color: #121212;
+        color: #f0f0f0;
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+    </style>
+    <script>
+      (function() {
+        try {
+          var s = localStorage.getItem('mdreader-settings');
+          if (s) {
+            var parsed = JSON.parse(s);
+            if (parsed.isDark === false) {
+              document.documentElement.classList.remove('dark');
+              document.documentElement.style.backgroundColor = '#fcfcfc';
+              document.documentElement.style.color = '#334155';
+            }
+          }
+        } catch(e) {}
+      })();
+    </script>
   </head>
-  <body>
+  <body style="background-color: inherit; color: inherit;">
     <div id="app"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

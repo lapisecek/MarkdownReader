@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback, Fragment } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo, Fragment } from 'react';
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from 'tiptap-markdown';
@@ -9,7 +9,8 @@ import {
   Minus, Square, Settings, Copy as CopyAllIcon,
   Eye, EyeOff,
   Pencil, ChevronUp, ChevronDown, BookOpen, AlignLeft, AlignCenter, AlignRight, AlignJustify, Table as TableIcon,
-  Link2, Image as ImageIcon, CheckSquare, Highlighter, Subscript as SubscriptIcon, Superscript as SuperscriptIcon, Asterisk, ListMinus, Download
+  Link2, Image as ImageIcon, CheckSquare, Highlighter, Subscript as SubscriptIcon, Superscript as SuperscriptIcon, Asterisk, ListMinus, Download,
+  Loader2
 } from 'lucide-react';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { createLowlight, common } from 'lowlight';
@@ -59,7 +60,9 @@ declare global {
       maximizeWindow: () => void;
       closeWindow: () => void;
       setAsDefault: () => Promise<{ success: boolean; error?: string }>;
-      exportToPDF: (options: { defaultName?: string, pageSize?: string }) => Promise<{ success: boolean, filePath?: string, error?: string, canceled?: boolean }>;
+      exportToPDF: (data: { html?: string, title?: string, options?: any }) => Promise<{ success: boolean, filePath?: string, error?: string, canceled?: boolean }>;
+      printDocument: (data: { html?: string, title?: string, options?: any }) => Promise<{ success: boolean, error?: string }>;
+      getSystemFonts: () => Promise<string[]>;
       saveAssetImage: (data: { base64Data: string, activeFilePath: string | null, fileName?: string }) => Promise<{ success: boolean, relativePath?: string, fullPath?: string, error?: string }>;
       onWindowStateChange: (callback: (state: { isMaximized: boolean }) => void) => void;
       checkWindowsIntegration: () => Promise<{
@@ -83,7 +86,6 @@ declare global {
   }
 }
 
-
 interface Tab {
   id: string;
   filePath: string | null;
@@ -93,13 +95,50 @@ interface Tab {
   isReadOnly: boolean;
 }
 
-
-
 const loadSettings = (): AppSettings => {
   try { const s = localStorage.getItem('mdreader-settings'); if (s) return { ...DEFAULT_SETTINGS, ...JSON.parse(s) }; } catch {}
   return { ...DEFAULT_SETTINGS };
 };
 const saveSettingsToLS = (s: AppSettings) => { try { localStorage.setItem('mdreader-settings', JSON.stringify(s)); } catch {} };
+
+// Smart Document Mode Tracking (distinguishes files created/edited by MarkdownReader from external files)
+const pathNormalize = (p: string) => p.replace(/\\/g, '/').toLowerCase();
+
+const loadAppCreatedFiles = (): Set<string> => {
+  try {
+    const raw = localStorage.getItem('mdreader-app-files');
+    if (raw) return new Set(JSON.parse(raw));
+  } catch {}
+  return new Set();
+};
+
+const markFileAsAppCreated = (filePath: string | null) => {
+  if (!filePath) return;
+  try {
+    const existing = loadAppCreatedFiles();
+    existing.add(pathNormalize(filePath));
+    localStorage.setItem('mdreader-app-files', JSON.stringify(Array.from(existing)));
+  } catch {}
+};
+
+const isFileAppCreated = (filePath: string | null): boolean => {
+  if (!filePath) return true; // untitled files in MarkdownReader
+  try {
+    const set = loadAppCreatedFiles();
+    return set.has(pathNormalize(filePath));
+  } catch {}
+  return false;
+};
+
+const determineDefaultReadOnly = (filePath: string | null, defaultMode: string): boolean => {
+  if (defaultMode === 'read') return true;
+  if (defaultMode === 'edit') return false;
+  // 'smart' mode:
+  // External unedited files opened for the first time default to Reading Mode (true).
+  // Files created or previously edited in MarkdownReader default to Editing Mode (false).
+  if (!filePath) return false;
+  return !isFileAppCreated(filePath);
+};
 
 const scrollTargets = new WeakMap<HTMLElement, { target: number, current: number, raf: number }>();
 const smoothScroll = (el: HTMLElement, delta: number) => {
@@ -144,7 +183,20 @@ const getParentDirectory = (dirPath: string) => {
  * ============================================================================
  */
 
-const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorReady, onSelectionUpdate, settings }: any) => {
+const resolveFontFamily = (settings: AppSettings) => {
+  if (settings.customFontFamily) {
+    return `"${settings.customFontFamily}", system-ui, -apple-system, sans-serif`;
+  }
+  if (settings.fontFamily === 'mono') {
+    return 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+  }
+  if (settings.fontFamily === 'serif') {
+    return 'Georgia, Cambria, "Times New Roman", Times, serif';
+  }
+  return 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+};
+
+const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorReady, onSelectionUpdate, onProcessing, settings }: any) => {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ codeBlock: false, heading: false, link: false }),
@@ -177,17 +229,31 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
     ],
     content: tab.content,
     editable: !tab.isReadOnly,
-    onUpdate: () => {
+    onUpdate: ({ transaction }: any) => {
       setUnsaved(tab.id, true);
+      const isLargeChange = transaction && transaction.steps && transaction.steps.some((s: any) => {
+        if (s.slice?.content?.size > 1000) return true;
+        if (s.from !== undefined && s.to !== undefined && Math.abs(s.to - s.from) > 1000) return true;
+        return false;
+      });
+      if (isLargeChange || (transaction?.doc?.content?.size || 0) > 80000) {
+        onProcessing?.(400);
+      }
       onSelectionUpdate();
     },
-    onSelectionUpdate: () => {
+    onSelectionUpdate: ({ editor }: any) => {
+      try {
+        const { from, to } = editor.state.selection;
+        if (Math.abs(to - from) > 2000) {
+          onProcessing?.(350);
+        }
+      } catch (e) {}
       onSelectionUpdate();
     },
     editorProps: {
       attributes: {
         class: `prose dark:prose-invert max-w-none focus:outline-none min-h-[calc(100vh-150px)] px-12 pt-6 pb-32 ${tab.isReadOnly ? 'cursor-default' : ''}`,
-        style: `font-size: ${settings.fontSize}px; line-height: ${settings.lineHeight}; font-family: ${settings.fontFamily === 'mono' ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' : settings.fontFamily === 'serif' ? 'Georgia, Cambria, "Times New Roman", Times, serif' : 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'}`,
+        style: `font-size: ${settings.fontSize}px; line-height: ${settings.lineHeight}; font-family: ${resolveFontFamily(settings)}`,
         spellcheck: settings.spellCheck ? 'true' : 'false',
       },
       handleDOMEvents: {
@@ -376,11 +442,7 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
     const dom = editor.view.dom;
     dom.style.fontSize = `${settings.fontSize}px`;
     dom.style.lineHeight = `${settings.lineHeight}`;
-    dom.style.fontFamily = settings.fontFamily === 'mono' 
-      ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace' 
-      : settings.fontFamily === 'serif' 
-        ? 'Georgia, Cambria, "Times New Roman", Times, serif' 
-        : 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    dom.style.fontFamily = resolveFontFamily(settings);
     if (!settings.wordWrap) {
       dom.style.whiteSpace = 'pre';
       dom.style.overflowX = 'auto';
@@ -388,7 +450,7 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
       dom.style.whiteSpace = 'normal';
       dom.style.overflowX = 'visible';
     }
-  }, [editor, settings.fontSize, settings.lineHeight, settings.fontFamily, settings.wordWrap]);
+  }, [editor, settings.fontSize, settings.lineHeight, settings.fontFamily, settings.customFontFamily, settings.wordWrap]);
 
   return (
     <div style={{ display: isActive ? 'block' : 'none' }} className="h-full w-full relative">
@@ -464,9 +526,12 @@ function App() {
     onSubmit: (val1: string, val2: string) => void;
   } | null>(null);
 
-  const [tabs, setTabs] = useState<Tab[]>(() => [
-    { id: '1', filePath: null, fileName: 'Untitled.md', content: '', isUnsaved: false, isReadOnly: loadSettings().defaultMode === 'read' }
-  ]);
+  const [tabs, setTabs] = useState<Tab[]>(() => {
+    const s = loadSettings();
+    return [
+      { id: '1', filePath: null, fileName: 'Untitled.md', content: '', isUnsaved: false, isReadOnly: determineDefaultReadOnly(null, s.defaultMode) }
+    ];
+  });
   const [activeTabId, setActiveTabId] = useState('1');
   const editorsRef = useRef<Record<string, any>>({});
 
@@ -481,6 +546,14 @@ function App() {
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
+  const [isProcessing, setIsProcessing] = useState(false);
+  const processingTimeoutRef = useRef<any>(null);
+  const triggerProcessingIndicator = useCallback((duration = 400) => {
+    setIsProcessing(true);
+    if (processingTimeoutRef.current) clearTimeout(processingTimeoutRef.current);
+    processingTimeoutRef.current = setTimeout(() => setIsProcessing(false), duration);
+  }, []);
+
   const handleEditorReady = useCallback((id: string, ed: any) => {
     editorsRef.current[id] = ed;
     setTabs(p => {
@@ -494,12 +567,20 @@ function App() {
     setTabs(p => {
       const target = p.find(t => t.id === id);
       if (!target || target.isUnsaved === s) return p;
+      if (s && target.filePath) {
+        markFileAsAppCreated(target.filePath);
+      }
       return p.map(t => t.id === id ? { ...t, isUnsaved: s } : t);
     });
   }, []);
 
+  const selectionRaf = useRef<number>(0);
   const handleSelectionUpdate = useCallback(() => {
-    setSelectionTick(p => p + 1);
+    if (selectionRaf.current) return;
+    selectionRaf.current = requestAnimationFrame(() => {
+      setSelectionTick(p => p + 1);
+      selectionRaf.current = 0;
+    });
   }, []);
 
   const [isInitializing, setIsInitializing] = useState(true);
@@ -513,7 +594,17 @@ function App() {
    * THEME & EFFECTS
    * --------------------------------------------------------------------------
    */
-  const themeColors = THEME_COLORS[settings.theme];
+  const themeColors = useMemo(() => {
+    if (settings.theme === 'custom') {
+      const accent = settings.customAccentColor || '#8b5cf6';
+      return {
+        accent,
+        accentBg: `${accent}22`,
+        label: 'Custom Theme',
+      };
+    }
+    return THEME_COLORS[settings.theme as keyof typeof THEME_COLORS] || THEME_COLORS.default;
+  }, [settings.theme, settings.customAccentColor]);
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
   const isReading = activeTab.isReadOnly;
   const tr = (settings.animationsEnabled && !isInitializing) ? 'all 0.25s cubic-bezier(0.4,0,0.2,1)' : 'none';
@@ -633,13 +724,18 @@ function App() {
 
   useEffect(() => {
     if (!activeEditor) return;
-    const newHeadings: any[] = [];
-    activeEditor.state.doc.descendants((node: any, pos: number) => {
-      if (node.type.name === 'heading') {
-        newHeadings.push({ level: node.attrs.level, text: node.textContent, pos });
-      }
-    });
-    setHeadings(newHeadings);
+    const timer = setTimeout(() => {
+      try {
+        const newHeadings: any[] = [];
+        activeEditor.state.doc.descendants((node: any, pos: number) => {
+          if (node.type.name === 'heading') {
+            newHeadings.push({ level: node.attrs.level, text: node.textContent, pos });
+          }
+        });
+        setHeadings(newHeadings);
+      } catch (e) {}
+    }, 200);
+    return () => clearTimeout(timer);
   }, [activeEditor, activeTab.content]);
 
   /**
@@ -652,41 +748,52 @@ function App() {
     if (!activeEditor) return;
     activeEditor.commands.setSearchTerm(searchQuery);
 
-    if (!searchQuery) {
+    if (!searchQuery || !searchQuery.trim()) {
       setTotalMatches(0);
       return;
     }
-    let count = 0;
-    const regex = new RegExp(searchQuery.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'), 'gi');
-    activeEditor.state.doc.descendants((node: any) => {
-      if (node.isText && node.text) {
-        regex.lastIndex = 0;
-        while (regex.exec(node.text) !== null) {
-          count++;
-        }
-      }
-    });
-    setTotalMatches(count);
-  }, [activeEditor, searchQuery, selectionTick]);
+    const timer = setTimeout(() => {
+      try {
+        let count = 0;
+        const regex = new RegExp(searchQuery.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'), 'gi');
+        activeEditor.state.doc.descendants((node: any) => {
+          if (count >= 500) return false;
+          if (node.isText && node.text) {
+            regex.lastIndex = 0;
+            while (regex.exec(node.text) !== null) {
+              count++;
+              if (count >= 500) break;
+            }
+          }
+        });
+        setTotalMatches(count);
+      } catch (e) {}
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [activeEditor, searchQuery]);
 
   useEffect(() => {
     if (!activeEditor) return;
     activeEditor.commands.setActiveMatchIndex(searchMatchIndex);
     
     if (!searchQuery || totalMatches === 0) return;
-    const matches: {start: number, end: number}[] = [];
-    const regex = new RegExp(searchQuery.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'), 'gi');
-    activeEditor.state.doc.descendants((node: any, pos: number) => {
-      if (node.isText && node.text) {
-        let m;
-        regex.lastIndex = 0;
-        while ((m = regex.exec(node.text)) !== null) {
-          matches.push({ start: pos + m.index, end: pos + m.index + m[0].length });
+    try {
+      const matches: {start: number, end: number}[] = [];
+      const regex = new RegExp(searchQuery.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&'), 'gi');
+      activeEditor.state.doc.descendants((node: any, pos: number) => {
+        if (matches.length > searchMatchIndex) return false;
+        if (node.isText && node.text) {
+          let m;
+          regex.lastIndex = 0;
+          while ((m = regex.exec(node.text)) !== null) {
+            matches.push({ start: pos + m.index, end: pos + m.index + m[0].length });
+            if (matches.length > searchMatchIndex) return false;
+          }
         }
-      }
-    });
-    const match = matches[searchMatchIndex];
-    if (match) activeEditor.chain().setTextSelection({ from: match.start, to: match.end }).scrollIntoView().run();
+      });
+      const match = matches[searchMatchIndex];
+      if (match) activeEditor.chain().setTextSelection({ from: match.start, to: match.end }).scrollIntoView().run();
+    } catch (e) {}
   }, [searchMatchIndex, searchQuery, totalMatches, activeEditor]);
 
   /**
@@ -701,10 +808,12 @@ function App() {
   const handleOpenFile = async (filePath: string) => {
     const existing = tabs.find(t => t.filePath === filePath);
     if (existing) { setActiveTabId(existing.id); return; }
+    triggerProcessingIndicator(350);
     const res = await window.api.readFile(filePath);
     if (res.success && res.content !== undefined) {
       const fileName = filePath.split(/[/\\]/).pop() || 'Untitled.md';
-      const newTab: Tab = { id: Date.now().toString(), filePath, fileName, content: res.content, isUnsaved: false, isReadOnly: settings.defaultMode === 'read' };
+      const isReadOnly = determineDefaultReadOnly(filePath, settings.defaultMode);
+      const newTab: Tab = { id: Date.now().toString(), filePath, fileName, content: res.content, isUnsaved: false, isReadOnly };
       setTabs(prev => (prev.length === 1 && !prev[0].filePath && !prev[0].content && !prev[0].isUnsaved) ? [newTab] : [...prev, newTab]);
       setActiveTabId(newTab.id);
     }
@@ -717,6 +826,7 @@ function App() {
     });
     window.api.onFileLoaded((data) => {
       console.log("Renderer received file-loaded:", data);
+      triggerProcessingIndicator(400);
       setTabs(prev => {
         console.log("Current tabs in state:", prev);
         const existing = prev.find(t => t.filePath === data.filePath);
@@ -726,7 +836,8 @@ function App() {
           return prev;
         }
         const fileName = data.filePath.split(/[/\\]/).pop() || 'Untitled.md';
-        const newTab: Tab = { id: Date.now().toString(), filePath: data.filePath, fileName, content: data.content, isUnsaved: false, isReadOnly: settingsRef.current.defaultMode === 'read' };
+        const isReadOnly = determineDefaultReadOnly(data.filePath, settingsRef.current.defaultMode);
+        const newTab: Tab = { id: Date.now().toString(), filePath: data.filePath, fileName, content: data.content, isUnsaved: false, isReadOnly };
         console.log("Adding new tab:", newTab);
         setTimeout(() => setActiveTabId(newTab.id), 0);
         if (prev.length === 1 && !prev[0].filePath && !prev[0].content && !prev[0].isUnsaved) {
@@ -758,10 +869,14 @@ function App() {
     const unsaved = tabs.filter(t => t.isUnsaved);
     for (const t of unsaved) {
       if (t.filePath) {
+        markFileAsAppCreated(t.filePath);
         await window.api.saveFile({ filePath: t.filePath, content: t.content });
       } else {
         const defaultPath = currentDir ? `${currentDir}\\${t.fileName}` : t.fileName;
-        await window.api.saveAsFile({ content: t.content, defaultName: defaultPath });
+        const res = await window.api.saveAsFile({ content: t.content, defaultName: defaultPath });
+        if (res.success && res.filePath) {
+          markFileAsAppCreated(res.filePath);
+        }
       }
     }
     setShowCloseDialog(false);
@@ -806,6 +921,7 @@ function App() {
       : await window.api.saveFile({ filePath: tab.filePath, content: contentToSave });
 
     if (result.success && result.filePath) {
+      markFileAsAppCreated(result.filePath);
       const fileName = result.filePath.split(/[/\\]/).pop() || 'Untitled.md';
       setTabs(prev => prev.map(t => t.id === tabId ? { ...t, filePath: result.filePath!, fileName, isUnsaved: false } : t));
       
@@ -827,6 +943,7 @@ function App() {
           const contentToSave = editor ? editor.storage.markdown.getMarkdown() : t.content;
           window.api.saveFile({ filePath: t.filePath, content: contentToSave }).then(r => { 
             if (r.success) {
+              if (t.filePath) markFileAsAppCreated(t.filePath);
               setTabs(p => p.map(x => x.id === t.id ? { ...x, content: contentToSave, isUnsaved: false } : x)); 
             }
           });
@@ -898,7 +1015,11 @@ function App() {
   const showBottomBar = !isMinimalistMode && !isReading && isBottomBarOpen && activeEditor;
   const showFileInfo = !isMinimalistMode || isReading;
 
-  const wordCount = activeTab.content ? activeTab.content.trim().split(/\s+/).filter(Boolean).length : 0;
+  const wordCount = useMemo(() => {
+    if (!activeTab.content) return 0;
+    const matches = activeTab.content.match(/\S+/g);
+    return matches ? matches.length : 0;
+  }, [activeTab.content]);
   const charCount = activeTab.content ? activeTab.content.length : 0;
 
   return (
@@ -917,6 +1038,13 @@ function App() {
               <span className="text-xs shrink-0" style={{ color: dk ? '#444' : '#71717a' }}>•</span>
               <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded-full shrink-0" style={{ backgroundColor: themeColors.accentBg, color: themeColors.accent }}>Reading</span>
             </>
+          )}
+          {isProcessing && (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium animate-pulse"
+                 style={{ backgroundColor: themeColors.accentBg, color: themeColors.accent }}>
+              <Loader2 size={11} className="animate-spin" />
+              <span>Processing...</span>
+            </div>
           )}
         </div>
 
@@ -1075,6 +1203,11 @@ function App() {
 
           {/* Editor area */}
           <div className="flex-1 overflow-y-auto relative py-6 px-6">
+            {isProcessing && (
+              <div className="absolute top-0 left-0 right-0 h-0.5 z-40 overflow-hidden" style={{ backgroundColor: themeColors.accentBg }}>
+                <div className="h-full w-1/3 animate-loading-bar rounded-full" style={{ backgroundColor: themeColors.accent }} />
+              </div>
+            )}
             <div className="mx-auto w-full min-h-full transition-all duration-300 relative group" 
                  style={{ 
                    maxWidth: settings.editorMaxWidth, 
@@ -1093,7 +1226,11 @@ function App() {
                   <textarea
                     value={tab.content}
                     onChange={e => {
-                      setTabs(ts => ts.map(t => t.id === tab.id ? { ...t, content: e.target.value, isUnsaved: true } : t));
+                      const newContent = e.target.value;
+                      if (Math.abs(newContent.length - tab.content.length) > 1000) {
+                        triggerProcessingIndicator(350);
+                      }
+                      setTabs(ts => ts.map(t => t.id === tab.id ? { ...t, content: newContent, isUnsaved: true } : t));
                     }}
                     wrap={settings.wordWrap ? 'soft' : 'off'}
                     className="w-full h-full min-h-[calc(100vh-150px)] px-12 pt-6 pb-32 bg-transparent resize-none focus:outline-none"
@@ -1115,6 +1252,7 @@ function App() {
                       onEditorActive={setActiveEditor} 
                       onEditorReady={handleEditorReady}
                       onSelectionUpdate={handleSelectionUpdate}
+                      onProcessing={triggerProcessingIndicator}
                       settings={settings} />
                   </div>
                 </Fragment>
@@ -1303,6 +1441,12 @@ function App() {
                 </div>
                 {settings.showStatusBar && (
                   <div className="flex items-center gap-3 ml-4 shrink-0 text-[11px]" style={{ color: dk ? '#555' : '#71717a' }}>
+                    {isProcessing && (
+                      <div className="flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] animate-pulse" style={{ backgroundColor: themeColors.accentBg, color: themeColors.accent }}>
+                        <Loader2 size={11} className="animate-spin" />
+                        <span>Processing...</span>
+                      </div>
+                    )}
                     <span>{wordCount} words</span><span>{charCount} chars</span>
                   </div>
                 )}

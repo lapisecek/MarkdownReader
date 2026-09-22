@@ -1,9 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Settings, X, Palette, Pen, Keyboard, Download, Type, Monitor, CheckCircle2, Wrench, RefreshCw, FileText, LayoutGrid, Menu, Check } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import {
+  Settings, X, Palette, Pen, Keyboard, Download, Type, Monitor,
+  CheckCircle2, Wrench, RefreshCw, FileText, LayoutGrid, Menu, Check,
+  Search, ChevronDown, Sparkles, Pipette
+} from 'lucide-react';
 
-export type AppTheme = 'default' | 'ocean' | 'forest' | 'sunset' | 'midnight';
-export type EditorFontFamily = 'sans' | 'mono' | 'serif';
-export type DefaultEditorMode = 'edit' | 'read';
+export type AppTheme = 'default' | 'ocean' | 'forest' | 'sunset' | 'midnight' | 'custom';
+export type EditorFontFamily = 'sans' | 'mono' | 'serif' | 'custom';
+export type DefaultEditorMode = 'smart' | 'edit' | 'read';
 
 export interface AppSettings {
   theme: AppTheme;
@@ -20,6 +24,8 @@ export interface AppSettings {
   spellCheck: boolean;
   copyAsMarkdown: boolean;
   fontFamily: EditorFontFamily;
+  customFontFamily: string;
+  customAccentColor: string;
   defaultMode: DefaultEditorMode;
 }
 
@@ -38,16 +44,33 @@ export const DEFAULT_SETTINGS: AppSettings = {
   spellCheck: false,
   copyAsMarkdown: true,
   fontFamily: 'sans',
-  defaultMode: 'edit',
+  customFontFamily: '',
+  customAccentColor: '#8b5cf6',
+  defaultMode: 'smart',
 };
 
-export const THEME_COLORS: Record<AppTheme, { accent: string, accentBg: string, label: string }> = {
-  default: { accent: '#3b82f6', accentBg: 'rgba(59,130,246,0.1)', label: 'Default Blue' },
-  ocean: { accent: '#06b6d4', accentBg: 'rgba(6,182,212,0.1)', label: 'Ocean Cyan' },
-  forest: { accent: '#22c55e', accentBg: 'rgba(34,197,94,0.1)', label: 'Forest Green' },
-  sunset: { accent: '#f97316', accentBg: 'rgba(249,115,22,0.1)', label: 'Sunset Orange' },
-  midnight: { accent: '#a78bfa', accentBg: 'rgba(167,139,250,0.1)', label: 'Midnight Violet' },
+export const THEME_COLORS: Record<Exclude<AppTheme, 'custom'>, { accent: string, accentBg: string, label: string }> = {
+  default: { accent: '#3b82f6', accentBg: 'rgba(59,130,246,0.12)', label: 'Default Blue' },
+  ocean: { accent: '#06b6d4', accentBg: 'rgba(6,182,212,0.12)', label: 'Ocean Cyan' },
+  forest: { accent: '#22c55e', accentBg: 'rgba(34,197,94,0.12)', label: 'Forest Green' },
+  sunset: { accent: '#f97316', accentBg: 'rgba(249,115,22,0.12)', label: 'Sunset Orange' },
+  midnight: { accent: '#a78bfa', accentBg: 'rgba(167,139,250,0.12)', label: 'Midnight Violet' },
 };
+
+export const PRESET_CUSTOM_COLORS = [
+  '#ef4444', // Crimson
+  '#f97316', // Orange
+  '#f59e0b', // Amber
+  '#10b981', // Emerald
+  '#06b6d4', // Cyan
+  '#3b82f6', // Blue
+  '#6366f1', // Indigo
+  '#8b5cf6', // Violet
+  '#d946ef', // Fuchsia
+  '#ec4899', // Pink
+  '#14b8a6', // Teal
+  '#84cc16', // Lime
+];
 
 export const SHORTCUTS = [
   { label: 'Save Document', keys: 'Ctrl+S' },
@@ -96,12 +119,12 @@ export const RangeSlider = ({ min, max, step, value, onChange, accent }: any) =>
 };
 
 export const SettingRow = ({ label, desc, children }: { label: string, desc?: string, children: React.ReactNode }) => (
-  <div className="flex items-center justify-between py-1">
-    <div>
+  <div className="flex items-center justify-between py-1 gap-4">
+    <div className="flex-1">
       <div className="text-sm font-medium">{label}</div>
       {desc && <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{desc}</div>}
     </div>
-    {children}
+    <div className="shrink-0">{children}</div>
   </div>
 );
 
@@ -109,7 +132,7 @@ interface SettingsModalProps {
   settings: AppSettings;
   onUpdate: (s: Partial<AppSettings>) => void;
   onClose: () => void;
-  themeColors: typeof THEME_COLORS[AppTheme];
+  themeColors: { accent: string, accentBg: string, label?: string };
   onOpenExport?: () => void;
 }
 
@@ -125,6 +148,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [isFixingWin, setIsFixingWin] = useState(false);
   const [winToastMsg, setWinToastMsg] = useState<string | null>(null);
   const historyRef = useRef<AppSettings[]>([]);
+
+  // Custom Color State
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [colorInput, setColorInput] = useState(settings.customAccentColor || '#8b5cf6');
+
+  // Installed System Fonts State
+  const [systemFonts, setSystemFonts] = useState<string[]>([]);
+  const [fontSearch, setFontSearch] = useState('');
+  const [isFontDropdownOpen, setIsFontDropdownOpen] = useState(false);
+  const fontDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (window.api?.getSystemFonts) {
+      window.api.getSystemFonts().then(fonts => {
+        if (Array.isArray(fonts) && fonts.length > 0) {
+          setSystemFonts(fonts);
+        }
+      });
+    }
+  }, []);
+
+  // Filter fonts by search query
+  const filteredFonts = useMemo(() => {
+    if (!fontSearch.trim()) return systemFonts.slice(0, 150);
+    const q = fontSearch.toLowerCase();
+    return systemFonts.filter(f => f.toLowerCase().includes(q)).slice(0, 150);
+  }, [systemFonts, fontSearch]);
+
+  // Close font dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (fontDropdownRef.current && !fontDropdownRef.current.contains(e.target as Node)) {
+        setIsFontDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const checkWinStatus = async () => {
     if (window.api?.checkWindowsIntegration) {
@@ -181,6 +242,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     onUpdate(s);
   };
 
+  const handleApplyCustomColor = (color: string) => {
+    setColorInput(color);
+    handleUpdate({
+      theme: 'custom',
+      customAccentColor: color,
+    });
+  };
+
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
@@ -197,11 +266,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   }, [settings, onUpdate]);
 
   return (
-    <div className="fixed inset-0 z-[200] flex justify-center items-start py-20 bg-black/50 backdrop-blur-sm px-4 select-none" onClick={onClose}>
+    <div className="fixed inset-0 z-[200] flex justify-center items-start py-14 sm:py-20 bg-black/50 backdrop-blur-sm px-4 select-none" onClick={onClose}>
       <div
         className="bg-white dark:bg-[#1e1e1e] shadow-2xl w-full max-w-2xl flex flex-col border border-gray-200 dark:border-gray-800 overflow-hidden rounded-2xl max-h-[85vh] animate-in fade-in zoom-in-95 duration-150"
         onClick={e => e.stopPropagation()}
       >
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-800 shrink-0">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <Settings size={18} style={{ color: themeColors.accent }} /> Settings
@@ -211,6 +281,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
 
+        {/* Tab Strip */}
         <div className="flex gap-1 px-6 pt-3 pb-2 border-b border-gray-200 dark:border-gray-800 shrink-0 overflow-x-auto">
           {stabs.map(t => (
             <button
@@ -225,28 +296,109 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           ))}
         </div>
 
+        {/* Tab Content */}
         <div className="flex-1 overflow-y-auto px-6 py-5">
           {activeTab === 'appearance' && (
-            <div className="space-y-5">
+            <div className="space-y-6">
+              {/* Theme Selector */}
               <div>
-                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2.5 block">Color Theme</label>
-                <div className="grid grid-cols-5 gap-2.5">
-                  {(Object.keys(THEME_COLORS) as AppTheme[]).map(t => (
+                <div className="flex items-center justify-between mb-2.5">
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Color Palette</label>
+                  {settings.theme === 'custom' && (
+                    <span className="text-[11px] font-mono font-semibold" style={{ color: settings.customAccentColor || '#8b5cf6' }}>
+                      {settings.customAccentColor}
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-6 gap-2">
+                  {/* Preset Themes */}
+                  {(Object.keys(THEME_COLORS) as Array<Exclude<AppTheme, 'custom'>>).map(t => (
                     <button
                       key={t}
                       onClick={() => handleUpdate({ theme: t })}
-                      className={`flex flex-col items-center gap-2 p-3 rounded-xl border-2 transition-all ${
+                      className={`flex flex-col items-center gap-2 p-2.5 rounded-xl border-2 transition-all ${
                         settings.theme === t
-                          ? 'shadow-md scale-105'
+                          ? 'shadow-md scale-105 bg-gray-50 dark:bg-white/[0.04]'
                           : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700'
                       }`}
                       style={settings.theme === t ? { borderColor: THEME_COLORS[t].accent } : {}}
                     >
-                      <div className="w-6 h-6 rounded-full shadow-inner" style={{ backgroundColor: THEME_COLORS[t].accent }} />
-                      <span className="text-[11px] font-medium">{THEME_COLORS[t].label.split(' ')[0]}</span>
+                      <div className="w-5 h-5 rounded-full shadow-inner" style={{ backgroundColor: THEME_COLORS[t].accent }} />
+                      <span className="text-[10px] font-medium truncate max-w-[50px]">{THEME_COLORS[t].label.split(' ')[0]}</span>
                     </button>
                   ))}
+
+                  {/* Custom Theme Card */}
+                  <button
+                    onClick={() => {
+                      handleUpdate({ theme: 'custom' });
+                      setShowColorPicker(true);
+                    }}
+                    className={`flex flex-col items-center gap-2 p-2.5 rounded-xl border-2 transition-all group ${
+                      settings.theme === 'custom'
+                        ? 'shadow-md scale-105 bg-gray-50 dark:bg-white/[0.04]'
+                        : 'border-dashed border-gray-300 dark:border-gray-700 hover:border-blue-500'
+                    }`}
+                    style={settings.theme === 'custom' ? { borderColor: settings.customAccentColor || '#8b5cf6' } : {}}
+                  >
+                    <div
+                      className="w-5 h-5 rounded-full shadow-inner flex items-center justify-center text-white"
+                      style={{
+                        backgroundColor: settings.customAccentColor || '#8b5cf6',
+                        boxShadow: `0 0 8px ${(settings.customAccentColor || '#8b5cf6')}60`
+                      }}
+                    >
+                      <Sparkles size={11} />
+                    </div>
+                    <span className="text-[10px] font-semibold">Custom</span>
+                  </button>
                 </div>
+
+                {/* Custom Color Palette Popover / Inline Box */}
+                {(settings.theme === 'custom' || showColorPicker) && (
+                  <div className="mt-3 p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-[#161616] space-y-3 animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
+                        <Pipette size={14} style={{ color: settings.customAccentColor || '#8b5cf6' }} />
+                        Custom Accent Color
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={colorInput}
+                          onChange={e => handleApplyCustomColor(e.target.value)}
+                          className="w-6 h-6 rounded cursor-pointer border-0 bg-transparent"
+                          title="Open OS Color Palette"
+                        />
+                        <input
+                          type="text"
+                          value={colorInput}
+                          onChange={e => handleApplyCustomColor(e.target.value)}
+                          placeholder="#8b5cf6"
+                          className="w-20 px-2 py-0.5 text-xs font-mono rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#202020] text-center"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Quick Swatches */}
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {PRESET_CUSTOM_COLORS.map(c => (
+                        <button
+                          key={c}
+                          onClick={() => handleApplyCustomColor(c)}
+                          className="w-5 h-5 rounded-full shadow-sm hover:scale-110 active:scale-95 transition-transform relative flex items-center justify-center"
+                          style={{ backgroundColor: c }}
+                          title={c}
+                        >
+                          {settings.customAccentColor?.toLowerCase() === c.toLowerCase() && (
+                            <Check size={11} className="text-white drop-shadow" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="pt-2 border-t border-gray-200 dark:border-gray-800 space-y-4">
@@ -262,23 +414,117 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <Toggle checked={settings.showStatusBar} onChange={v => handleUpdate({ showStatusBar: v })} />
                 </SettingRow>
 
-                <SettingRow label="Editor Typography" desc="Choose preferred reading and editing typeface">
-                  <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg text-xs">
+                {/* Typography / Font Customization with System Fonts Search */}
+                <div className="pt-2 border-t border-gray-200 dark:border-gray-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-medium">Editor & Reader Typography</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        Choose preset styles or select any font installed on your Windows computer
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Standard Typeface Pills */}
+                  <div className="flex gap-1.5 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl text-xs">
                     {(['sans', 'mono', 'serif'] as EditorFontFamily[]).map(f => (
                       <button
                         key={f}
-                        onClick={() => handleUpdate({ fontFamily: f })}
-                        className={`px-3 py-1 rounded-md capitalize font-medium transition-all ${
-                          settings.fontFamily === f
-                            ? 'bg-white dark:bg-[#121212] shadow-sm text-blue-500'
+                        onClick={() => handleUpdate({ fontFamily: f, customFontFamily: '' })}
+                        className={`flex-1 py-1.5 rounded-lg capitalize font-medium transition-all ${
+                          settings.fontFamily === f && !settings.customFontFamily
+                            ? 'bg-white dark:bg-[#121212] shadow-sm font-semibold'
                             : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
                         }`}
+                        style={settings.fontFamily === f && !settings.customFontFamily ? { color: themeColors.accent } : {}}
                       >
                         {f === 'sans' ? 'Sans-Serif' : f === 'mono' ? 'Monospace' : 'Serif'}
                       </button>
                     ))}
+                    <button
+                      onClick={() => setIsFontDropdownOpen(p => !p)}
+                      className={`flex-1 py-1.5 rounded-lg font-medium transition-all flex items-center justify-center gap-1 ${
+                        settings.customFontFamily
+                          ? 'bg-white dark:bg-[#121212] shadow-sm font-semibold'
+                          : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+                      }`}
+                      style={settings.customFontFamily ? { color: themeColors.accent } : {}}
+                    >
+                      <Type size={13} />
+                      <span className="truncate max-w-[80px]">{settings.customFontFamily || 'Installed...'}</span>
+                      <ChevronDown size={12} className={`transition-transform ${isFontDropdownOpen ? 'rotate-180' : ''}`} />
+                    </button>
                   </div>
-                </SettingRow>
+
+                  {/* System Fonts Dropdown Menu with Search Bar */}
+                  {isFontDropdownOpen && (
+                    <div
+                      ref={fontDropdownRef}
+                      className="p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#171717] shadow-xl space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-150"
+                    >
+                      {/* Search Bar */}
+                      <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#202020]">
+                        <Search size={14} className="text-gray-400 shrink-0" />
+                        <input
+                          type="text"
+                          value={fontSearch}
+                          onChange={e => setFontSearch(e.target.value)}
+                          placeholder="Search installed fonts (e.g. Cascadia, Segoe, Arial)..."
+                          className="bg-transparent outline-none text-xs w-full text-gray-800 dark:text-gray-200 placeholder-gray-400"
+                          autoFocus
+                        />
+                        {fontSearch && (
+                          <button onClick={() => setFontSearch('')} className="p-0.5 text-gray-400 hover:text-gray-600">
+                            <X size={13} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Font List */}
+                      <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
+                        {filteredFonts.length === 0 ? (
+                          <div className="text-xs text-center py-4 text-gray-400">No matching fonts found.</div>
+                        ) : (
+                          filteredFonts.map(fontName => {
+                            const isSelected = settings.customFontFamily === fontName;
+                            return (
+                              <button
+                                key={fontName}
+                                onClick={() => {
+                                  handleUpdate({
+                                    fontFamily: 'custom',
+                                    customFontFamily: fontName,
+                                  });
+                                  setIsFontDropdownOpen(false);
+                                }}
+                                className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-left transition-colors ${
+                                  isSelected
+                                    ? 'bg-blue-500/10 font-semibold text-blue-500'
+                                    : 'hover:bg-gray-100 dark:hover:bg-[#242424] text-gray-700 dark:text-gray-300'
+                                }`}
+                              >
+                                <span style={{ fontFamily: fontName }} className="truncate max-w-[280px]">
+                                  {fontName}
+                                </span>
+                                {isSelected && <Check size={14} className="shrink-0 text-blue-500" />}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      {/* Font Preview Sentence */}
+                      {settings.customFontFamily && (
+                        <div className="pt-2 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-500 dark:text-gray-400 flex items-center justify-between">
+                          <span className="font-semibold text-[11px] text-gray-400 uppercase tracking-wider">Preview:</span>
+                          <span style={{ fontFamily: settings.customFontFamily }} className="text-sm truncate max-w-[340px] text-gray-800 dark:text-gray-200">
+                            The quick brown fox jumps over the lazy dog.
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -319,22 +565,49 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </SettingRow>
               )}
 
-              <SettingRow label="Default Document Mode" desc="Preferred mode when launching files">
-                <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg text-xs">
+              {/* Default Document Opening Mode */}
+              <div className="pt-3 border-t border-gray-200 dark:border-gray-800 space-y-2">
+                <div className="text-sm font-medium">Default Opening Mode</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  Controls whether documents open in Reading Mode or Editing Mode
+                </div>
+                <div className="grid grid-cols-3 gap-1.5 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl text-xs mt-1">
                   <button
-                    onClick={() => handleUpdate({ defaultMode: 'edit' })}
-                    className={`px-3 py-1 rounded-md font-medium transition-colors ${settings.defaultMode === 'edit' ? 'bg-white dark:bg-[#121212] shadow-sm text-blue-500' : 'text-gray-500'}`}
+                    onClick={() => handleUpdate({ defaultMode: 'smart' })}
+                    className={`py-1.5 px-2 rounded-lg font-medium transition-all text-center ${
+                      settings.defaultMode === 'smart'
+                        ? 'bg-white dark:bg-[#121212] shadow-sm font-semibold'
+                        : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+                    }`}
+                    style={settings.defaultMode === 'smart' ? { color: themeColors.accent } : {}}
+                    title="Read for new external files; Edit for files created/modified in this app"
                   >
-                    Edit Mode
+                    Smart Auto-detect
                   </button>
                   <button
                     onClick={() => handleUpdate({ defaultMode: 'read' })}
-                    className={`px-3 py-1 rounded-md font-medium transition-colors ${settings.defaultMode === 'read' ? 'bg-white dark:bg-[#121212] shadow-sm text-blue-500' : 'text-gray-500'}`}
+                    className={`py-1.5 px-2 rounded-lg font-medium transition-all text-center ${
+                      settings.defaultMode === 'read'
+                        ? 'bg-white dark:bg-[#121212] shadow-sm font-semibold'
+                        : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+                    }`}
+                    style={settings.defaultMode === 'read' ? { color: themeColors.accent } : {}}
                   >
-                    Reading Mode
+                    Always Reading
+                  </button>
+                  <button
+                    onClick={() => handleUpdate({ defaultMode: 'edit' })}
+                    className={`py-1.5 px-2 rounded-lg font-medium transition-all text-center ${
+                      settings.defaultMode === 'edit'
+                        ? 'bg-white dark:bg-[#121212] shadow-sm font-semibold'
+                        : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+                    }`}
+                    style={settings.defaultMode === 'edit' ? { color: themeColors.accent } : {}}
+                  >
+                    Always Editing
                   </button>
                 </div>
-              </SettingRow>
+              </div>
 
               <div className="pt-4 mt-2 border-t border-gray-200 dark:border-gray-800">
                 <button
@@ -449,20 +722,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         className="px-3 py-1 rounded-lg text-xs font-semibold shadow-sm transition-all text-white"
                         style={{ backgroundColor: themeColors.accent }}
                       >
-                        Add to Start
+                        Pin to Start
                       </button>
                     )}
                   </div>
 
-                  {/* Context Menu */}
+                  {/* Explorer Context Menu */}
                   <div className="flex items-center justify-between p-3.5 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-white/[0.02]">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-500">
+                      <div className="p-2 rounded-xl bg-amber-500/10 text-amber-500">
                         <Menu size={16} />
                       </div>
                       <div>
-                        <div className="text-xs font-semibold">Windows Explorer Context Menu</div>
-                        <div className="text-[11px] text-gray-500">Right-click "Edit with MarkdownReader" & "Open Folder"</div>
+                        <div className="text-xs font-semibold">Explorer Context Menu</div>
+                        <div className="text-[11px] text-gray-500">Right-click "Edit with MarkdownReader" on files & folders</div>
                       </div>
                     </div>
                     {winStatus.hasContextMenu ? (
@@ -480,28 +753,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     )}
                   </div>
 
-                  <div className="pt-3 flex flex-col gap-2">
+                  {/* Fix All Button */}
+                  {!winStatus.allConfigured && (
                     <button
                       onClick={handleFixAllWin}
                       disabled={isFixingWin}
-                      className="w-full py-2.5 rounded-xl text-xs font-semibold text-white transition-all shadow-sm flex items-center justify-center gap-2"
+                      className="w-full mt-2 py-3 rounded-xl text-xs font-bold text-white shadow-lg transition-all flex items-center justify-center gap-2"
                       style={{ backgroundColor: themeColors.accent }}
                     >
                       <Wrench size={15} />
-                      {isFixingWin ? 'Applying Configurations...' : 'Configure All Windows Features (1-Click)'}
+                      {isFixingWin ? 'Applying Configurations...' : '1-Click Fix & Configure All'}
                     </button>
-
-                    <button
-                      onClick={() => {
-                        localStorage.removeItem('mdreader-hide-windows-setup');
-                        setWinToastMsg('Windows Setup Assistant popup reminder reset! It will appear if any item is unconfigured.');
-                        setTimeout(() => setWinToastMsg(null), 4000);
-                      }}
-                      className="py-1.5 text-[11px] text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 transition-colors text-center"
-                    >
-                      Reset Bottom-Right Setup Popup Reminder
-                    </button>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
@@ -509,56 +772,53 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
           {activeTab === 'export' && (
             <div className="space-y-4">
-              <p className="text-xs text-gray-500 leading-relaxed">
-                MarkdownReader provides publishing capabilities. You can export the active document directly to print-ready PDF, self-contained standalone HTML, or output to a physical printer.
-              </p>
+              <div>
+                <h3 className="text-sm font-semibold">Document Export & Sharing</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Export publication-quality PDFs, self-contained standalone HTML, or print directly.
+                </p>
+              </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <button
-                  onClick={() => {
-                    onClose();
-                    onOpenExport?.();
-                  }}
-                  className="flex items-center gap-3 p-4 rounded-xl border border-gray-200 dark:border-gray-800 hover:border-blue-500 transition-all text-left group"
-                >
-                  <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-500 group-hover:scale-110 transition-transform">
+              <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-white/[0.02] space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-xl bg-blue-500/10 text-blue-500">
                     <Download size={18} />
                   </div>
                   <div>
-                    <div className="text-xs font-semibold">Open Export Studio</div>
-                    <div className="text-[10px] text-gray-500">PDF, HTML, and Print tools</div>
+                    <h4 className="text-xs font-semibold">Isolated Export Studio</h4>
+                    <p className="text-[11px] text-gray-500">
+                      Configure page sizes, orientation, margins, headers/footers with an accurate real-time paper preview.
+                    </p>
                   </div>
-                </button>
+                </div>
 
                 <button
                   onClick={() => {
                     onClose();
-                    setTimeout(() => window.print(), 150);
+                    if (onOpenExport) onOpenExport();
                   }}
-                  className="flex items-center gap-3 p-4 rounded-xl border border-gray-200 dark:border-gray-800 hover:border-blue-500 transition-all text-left group"
+                  className="w-full py-2.5 rounded-xl text-xs font-bold text-white shadow-md transition-all flex items-center justify-center gap-2"
+                  style={{ backgroundColor: themeColors.accent }}
                 >
-                  <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-500 group-hover:scale-110 transition-transform">
-                    <Type size={18} />
-                  </div>
-                  <div>
-                    <div className="text-xs font-semibold">Quick Print</div>
-                    <div className="text-[10px] text-gray-500">Direct system printer dialog</div>
-                  </div>
+                  <Download size={15} /> Open Export Studio
                 </button>
               </div>
             </div>
           )}
 
           {activeTab === 'keybindings' && (
-            <div className="space-y-1.5">
-              {SHORTCUTS.map((s, i) => (
-                <div key={i} className="flex justify-between items-center py-2 px-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                  <span className="text-xs text-gray-700 dark:text-gray-300 font-medium">{s.label}</span>
-                  <kbd className="px-2.5 py-1 text-[11px] font-mono rounded-md bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400">
-                    {s.keys}
-                  </kbd>
-                </div>
-              ))}
+            <div className="space-y-2">
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Keyboard Shortcuts</div>
+              <div className="grid grid-cols-2 gap-2">
+                {SHORTCUTS.map(sc => (
+                  <div key={sc.label} className="flex items-center justify-between p-2 rounded-lg bg-gray-50 dark:bg-[#202020] text-xs">
+                    <span className="text-gray-700 dark:text-gray-300 truncate max-w-[170px]">{sc.label}</span>
+                    <kbd className="px-2 py-0.5 rounded bg-white dark:bg-[#161616] border border-gray-200 dark:border-gray-700 font-mono text-[10px] text-gray-600 dark:text-gray-400 shrink-0">
+                      {sc.keys}
+                    </kbd>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

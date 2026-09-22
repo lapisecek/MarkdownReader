@@ -3,10 +3,21 @@
 
 @layer base {
   :root {
+    --bg-color: #121212;
+    --text-color: #f0f0f0;
+    --text-muted: #a0a0a0;
+    --selection-bg: color-mix(in srgb, var(--accent-color, #3b82f6) 40%, transparent);
+    --sidebar-bg: #151515;
+    --panel-bg: #1a1a1a;
+    --panel-border: #2a2a2a;
+    --hover-bg: #2a2a2a;
+    --active-bg: #121212;
+  }
+  :root:not(.dark) {
     --bg-color: #fcfcfc;
     --text-color: #334155;
     --text-muted: #64748b;
-    --selection-bg: color-mix(in srgb, var(--accent-color) 25%, transparent);
+    --selection-bg: color-mix(in srgb, var(--accent-color, #3b82f6) 25%, transparent);
     --sidebar-bg: #f1f5f9;
     --panel-bg: #e2e8f0;
     --panel-border: #cbd5e1;
@@ -17,7 +28,7 @@
     --bg-color: #121212;
     --text-color: #f0f0f0;
     --text-muted: #a0a0a0;
-    --selection-bg: color-mix(in srgb, var(--accent-color) 40%, transparent);
+    --selection-bg: color-mix(in srgb, var(--accent-color, #3b82f6) 40%, transparent);
     --sidebar-bg: #151515;
     --panel-bg: #1a1a1a;
     --panel-border: #2a2a2a;
@@ -342,4 +353,14 @@ dl.deflist dd { margin-left: 1.5em; color: var(--text-muted); }
   background-color: var(--selection-bg) !important;
   outline: 2px solid var(--accent-color);
   outline-offset: -2px;
+}
+
+@keyframes loading-progress {
+  0% { transform: translateX(-100%); }
+  50% { transform: translateX(100%); }
+  100% { transform: translateX(300%); }
+}
+
+.animate-loading-bar {
+  animation: loading-progress 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }

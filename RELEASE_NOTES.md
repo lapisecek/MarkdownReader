@@ -1,6 +1,32 @@
-# MarkdownReader v1.3.0 Release Notes
+# MarkdownReader Release Notes
 
-**MarkdownReader v1.3.0** is a major milestone release transforming MarkdownReader into a production-grade, lightning-fast, and complete Windows desktop Markdown workspace.
+## 🚀 MarkdownReader v2.0.1 Release Notes
+
+**MarkdownReader v2.0.1** brings major performance optimizations, isolated publication studio, white-flash elimination, smart reading/editing modes, and extensive customization options.
+
+### 🌟 What's New in v2.0.1
+- **⚡ White Flash Elimination**: Completely eliminated the white screen flash when opening or loading Markdown files. Dark mode styling and user preferences are pre-rendered inline before the first UI paint.
+- **🚀 Ultra-Optimized Large Document Performance**:
+  - Re-engineered ProseMirror search indexing and selection handlers.
+  - Match decorations are capped at 500 to prevent freezes on massive Markdown files.
+  - Eliminated repetitive document regex traversals during cursor movements and selections.
+  - Throttled selections via `requestAnimationFrame` and debounced outline heading generation.
+- **⏳ Subtle Task Processing Indicators**: Added non-intrusive visual indicators during intensive operations (file opening, large text replacements, large selections, and saves), including a top-edge progress bar, title-bar status badge, and status-bar spinner.
+- **🧠 Smart Default Opening Mode**:
+  - External Markdown files opened for the first time default to **Reading Mode**.
+  - Files created or edited in MarkdownReader default to **Editing Mode**.
+  - Fully configurable in Settings with options: *Smart*, *Always Reading*, or *Always Editing*.
+- **📄 Isolated PDF & Print Export Studio**:
+  - Fixed screenshot capture bug: PDF and print operations now render pure document content in an isolated background window without leaking any editor controls, popups, or sidebars.
+  - Added live scaled paper preview with real-time zoom controls.
+  - Page format options (A4, Letter, A3, Legal, Tabloid), orientation, margin presets, scale (60%–140%), themes, and headers/footers.
+- **🎨 Custom Color Theme**: Interactive color picker in Settings with curated swatches, hex input, and native color selector.
+- **🔤 Installed Windows System Fonts**: Searchable font selector querying all locally installed Windows fonts with live previews.
+- **🛠️ Automated Build & Instant Start Menu Deployment**: Build script automatically cleans previous builds, terminates locks, compiles the fresh binary, and updates the Windows Start Menu and Desktop shortcuts for instant testing.
+
+---
+
+## MarkdownReader v2.0.0 / v1.3.0 Release Notes
 
 ---
 

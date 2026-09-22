@@ -5,13 +5,37 @@ const { execSync } = require('child_process');
 const asar = require('@electron/asar');
 
 async function build() {
+  const rootDir = path.resolve(__dirname, '..');
+  const distElectronDir = path.join(rootDir, 'dist-electron');
+  const stageDir = path.join(distElectronDir, 'stage');
+  const outDir = path.join(distElectronDir, 'MarkdownReader-win32-x64');
+  const winUnpackedDir = path.join(distElectronDir, 'win-unpacked');
+
+  console.log('--- Step 0: Cleaning Previous Builds & Releasing Locks ---');
+  try {
+    execSync('powershell -NoProfile -Command "Get-Process -Name MarkdownReader -ErrorAction SilentlyContinue | Stop-Process -Force"', { stdio: 'ignore' });
+  } catch (_) {}
+
+  if (fs.existsSync(outDir)) {
+    try { fs.rmSync(outDir, { recursive: true, force: true }); } catch (_) {}
+  }
+  if (fs.existsSync(winUnpackedDir)) {
+    try { fs.rmSync(winUnpackedDir, { recursive: true, force: true }); } catch (_) {}
+  }
+  if (fs.existsSync(stageDir)) {
+    try { fs.rmSync(stageDir, { recursive: true, force: true }); } catch (_) {}
+  }
+  if (fs.existsSync(distElectronDir)) {
+    const files = fs.readdirSync(distElectronDir);
+    for (const file of files) {
+      if (file.endsWith('.zip')) {
+        try { fs.unlinkSync(path.join(distElectronDir, file)); } catch (_) {}
+      }
+    }
+  }
+
   console.log('--- Step 1: Building Frontend Assets (Vite) ---');
   execSync('npx vite build', { stdio: 'inherit' });
-
-  const rootDir = path.resolve(__dirname, '..');
-  const stageDir = path.join(rootDir, 'dist-electron', 'stage');
-  const outDir = path.join(rootDir, 'dist-electron', 'MarkdownReader-win32-x64');
-  const winUnpackedDir = path.join(rootDir, 'dist-electron', 'win-unpacked');
 
   console.log('--- Step 2: Preparing Clean Staging Directory for ASAR ---');
   if (fs.existsSync(stageDir)) {
@@ -95,13 +119,57 @@ async function build() {
   }
 
   console.log('--- Step 6: Compressing Release Zip Archive ---');
-  const zipPath = path.join(rootDir, 'dist-electron', 'MarkdownReader-v1.3.0-win32-x64.zip');
+  const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
+  const version = pkg.version || '2.0.1';
+  const zipPath = path.join(rootDir, 'dist-electron', `MarkdownReader-v${version}-win32-x64.zip`);
   try {
     execSync(`powershell -NoProfile -Command "Compress-Archive -Path '${winUnpackedDir}\\*' -DestinationPath '${zipPath}' -Force"`, { stdio: 'inherit' });
     const zipSizeMb = (fs.statSync(zipPath).size / 1024 / 1024).toFixed(2);
     console.log(`Release archive generated: ${zipPath} (${zipSizeMb} MB)`);
   } catch (e) {
     console.warn('Zip generation warning:', e.message);
+  }
+
+  console.log('--- Step 7: Adding / Updating Windows Start Menu Shortcut ---');
+  try {
+    const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+    const startMenuPrograms = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs');
+    if (!fs.existsSync(startMenuPrograms)) {
+      fs.mkdirSync(startMenuPrograms, { recursive: true });
+    }
+    const shortcutPath = path.join(startMenuPrograms, 'MarkdownReader.lnk');
+    const exePath = path.join(winUnpackedDir, 'MarkdownReader.exe');
+    const iconPath = path.join(winUnpackedDir, 'icon.ico');
+
+    const psScript = `
+      $ws = New-Object -ComObject WScript.Shell;
+      $s = $ws.CreateShortcut('${shortcutPath.replace(/'/g, "''")}');
+      $s.TargetPath = '${exePath.replace(/'/g, "''")}';
+      $s.WorkingDirectory = '${winUnpackedDir.replace(/'/g, "''")}';
+      $s.IconLocation = '${iconPath.replace(/'/g, "''")},0';
+      $s.Description = 'MarkdownReader - Fast Desktop Markdown Workspace';
+      $s.Save();
+    `;
+    execSync(`powershell -NoProfile -Command "${psScript.replace(/\r?\n/g, ' ')}"`, { stdio: 'inherit' });
+    console.log(`✓ Start Menu shortcut created/updated: ${shortcutPath}`);
+
+    const desktopDir = path.join(os.homedir(), 'Desktop');
+    if (fs.existsSync(desktopDir)) {
+      const desktopShortcutPath = path.join(desktopDir, 'MarkdownReader.lnk');
+      const psDesktop = `
+        $ws = New-Object -ComObject WScript.Shell;
+        $s = $ws.CreateShortcut('${desktopShortcutPath.replace(/'/g, "''")}');
+        $s.TargetPath = '${exePath.replace(/'/g, "''")}';
+        $s.WorkingDirectory = '${winUnpackedDir.replace(/'/g, "''")}';
+        $s.IconLocation = '${iconPath.replace(/'/g, "''")},0';
+        $s.Description = 'MarkdownReader - Fast Desktop Markdown Workspace';
+        $s.Save();
+      `;
+      execSync(`powershell -NoProfile -Command "${psDesktop.replace(/\r?\n/g, ' ')}"`, { stdio: 'ignore' });
+      console.log(`✓ Desktop shortcut created/updated: ${desktopShortcutPath}`);
+    }
+  } catch (err) {
+    console.warn('Warning: Could not create shortcut:', err.message);
   }
 
   console.log('=== BUILD COMPLETED SUCCESSFULLY ===');

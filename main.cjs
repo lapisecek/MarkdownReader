@@ -134,7 +134,7 @@ function createWindow() {
     minHeight: 300,
     frame: false,
     show: true, // Show instantly on startup with dark background
-    backgroundColor: '#151515',
+    backgroundColor: '#121212',
     icon: getAppIconPath(),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -361,29 +361,224 @@ ipcMain.handle('read-file', async (event, filePath) => {
   }
 });
 
-// PDF Export Handler
-ipcMain.handle('export-to-pdf', async (event, options = {}) => {
+// Helper: Creates an isolated hidden window for pristine PDF / Print rendering
+async function createPrintWindow(htmlContent, title, theme = 'light', customStyles = '') {
+  const printWin = new BrowserWindow({
+    show: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: false,
+    },
+  });
+
+  const isDark = theme === 'dark';
+  const fullHTML = `<!DOCTYPE html>
+<html lang="en" class="${isDark ? 'dark' : ''}">
+<head>
+  <meta charset="UTF-8">
+  <title>${(title || 'Document').replace(/[<>&"]/g, '')}</title>
+  <style>
+    :root {
+      --accent-color: #3b82f6;
+      --bg-color: ${isDark ? '#121212' : '#ffffff'};
+      --text-color: ${isDark ? '#e4e4e7' : '#18181b'};
+      --border-color: ${isDark ? '#27272a' : '#e4e4e7'};
+      --code-bg: ${isDark ? '#1a1a1a' : '#f4f4f5'};
+    }
+    @page {
+      size: auto;
+      margin: 12mm 15mm 15mm 15mm;
+    }
+    *, *:before, *:after {
+      box-sizing: border-box;
+    }
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.65;
+      font-size: 14px;
+      margin: 0;
+      padding: 0;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .document-body {
+      width: 100%;
+      max-width: 100%;
+      margin: 0 auto;
+    }
+    h1, h2, h3, h4, h5, h6 { font-weight: 600; line-height: 1.3; margin-top: 1.5em; margin-bottom: 0.5em; page-break-after: avoid; }
+    h1 { font-size: 2.1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3em; }
+    h2 { font-size: 1.6rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3em; }
+    h3 { font-size: 1.3rem; }
+    h4 { font-size: 1.1rem; }
+    p { margin: 0.8em 0; }
+    a { color: var(--accent-color); text-decoration: underline; text-underline-offset: 3px; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; background: var(--code-bg); padding: 0.15em 0.35em; border-radius: 4px; font-size: 86%; }
+    pre { background: var(--code-bg); padding: 0.9rem 1.1rem; border-radius: 8px; overflow-x: auto; border: 1px solid var(--border-color); page-break-inside: avoid; font-family: ui-monospace, monospace; font-size: 86%; line-height: 1.5; }
+    pre code { background: transparent; padding: 0; border: none; font-size: inherit; }
+    blockquote { border-left: 4px solid var(--accent-color); margin: 1em 0; padding-left: 1rem; color: #71717a; font-style: italic; page-break-inside: avoid; }
+    table { width: 100%; border-collapse: collapse; margin: 1.5em 0; page-break-inside: avoid; }
+    th, td { border: 1px solid var(--border-color); padding: 0.6em 0.9em; text-align: left; }
+    th { background: var(--code-bg); font-weight: 600; }
+    img { max-width: 100%; height: auto; border-radius: 6px; margin: 1em 0; page-break-inside: avoid; display: block; }
+    hr { border: none; border-top: 1px solid var(--border-color); margin: 2em 0; }
+    ul, ol { margin: 0.8em 0; padding-left: 1.8em; }
+    li { margin: 0.3em 0; }
+    .mermaid-container, .katex-math-block { page-break-inside: avoid; margin: 1.2em 0; text-align: center; }
+    .mermaid-container svg { max-width: 100%; height: auto; display: inline-block; }
+    ${customStyles}
+  </style>
+</head>
+<body>
+  <div class="document-body">
+    ${htmlContent}
+  </div>
+</body>
+</html>`;
+
+  await printWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(fullHTML)}`);
+  return printWin;
+}
+
+// PDF Export Handler (Isolated Clean Document)
+ipcMain.handle('export-to-pdf', async (event, data = {}) => {
+  const { html, title, options = {} } = data;
+  let printWin = null;
   try {
+    const defaultName = options.defaultName || `${(title || 'Document').replace(/[\\/:*?"<>|]/g, '_')}.pdf`;
     const { canceled, filePath } = await dialog.showSaveDialog(mainWindow, {
       title: 'Export Document to PDF',
-      defaultPath: options.defaultName || 'Document.pdf',
+      defaultPath: defaultName,
       filters: [{ name: 'PDF Document', extensions: ['pdf'] }]
     });
     if (canceled || !filePath) return { success: false, canceled: true };
 
-    const pdfData = await mainWindow.webContents.printToPDF({
-      printBackground: true,
+    printWin = await createPrintWindow(
+      html || '',
+      title || 'Document',
+      options.theme || 'light',
+      options.customCss || ''
+    );
+
+    // Let any async rendering settle
+    await new Promise(r => setTimeout(r, 250));
+
+    const marginType = options.margins?.marginType || 'default';
+    const pdfData = await printWin.webContents.printToPDF({
+      printBackground: options.printBackground !== undefined ? options.printBackground : true,
       pageSize: options.pageSize || 'A4',
-      margins: {
-        marginType: 'standard'
-      }
+      landscape: !!options.landscape,
+      margins: options.margins || { marginType },
+      scale: options.scale ? Number(options.scale) : 1,
+      displayHeaderFooter: !!options.headerFooter,
+      headerTemplate: options.headerFooter
+        ? `<div style="font-size:9px;width:100%;text-align:right;padding-right:15mm;color:#888;">${(title || 'Document').replace(/[<>&"]/g, '')}</div>`
+        : '<div></div>',
+      footerTemplate: options.headerFooter
+        ? `<div style="font-size:9px;width:100%;text-align:center;color:#888;"><span class="pageNumber"></span> / <span class="totalPages"></span></div>`
+        : '<div></div>',
     });
+
     await fs.promises.writeFile(filePath, pdfData);
     return { success: true, filePath };
   } catch (err) {
     console.error('Failed to export PDF:', err);
     return { success: false, error: err.message };
+  } finally {
+    if (printWin && !printWin.isDestroyed()) {
+      printWin.destroy();
+    }
   }
+});
+
+// Direct Print Handler (Isolated Clean Document)
+ipcMain.handle('print-document', async (event, data = {}) => {
+  const { html, title, options = {} } = data;
+  let printWin = null;
+  try {
+    printWin = await createPrintWindow(
+      html || '',
+      title || 'Document',
+      options.theme || 'light',
+      options.customCss || ''
+    );
+
+    await new Promise(r => setTimeout(r, 250));
+
+    return await new Promise((resolve) => {
+      printWin.webContents.print(
+        {
+          silent: false,
+          printBackground: options.printBackground !== undefined ? options.printBackground : true,
+          pageSize: options.pageSize || 'A4',
+          landscape: !!options.landscape,
+          margins: options.margins || { marginType: 'default' },
+          scaleFactor: options.scale ? Math.round(Number(options.scale) * 100) : 100,
+        },
+        (success, failureReason) => {
+          resolve({ success, error: failureReason });
+        }
+      );
+    });
+  } catch (err) {
+    console.error('Failed to print document:', err);
+    return { success: false, error: err.message };
+  } finally {
+    if (printWin && !printWin.isDestroyed()) {
+      printWin.destroy();
+    }
+  }
+});
+
+// System Fonts IPC Handler
+let cachedSystemFonts = null;
+ipcMain.handle('get-system-fonts', async () => {
+  if (cachedSystemFonts && cachedSystemFonts.length > 0) {
+    return cachedSystemFonts;
+  }
+  if (process.platform === 'win32') {
+    try {
+      const { exec } = require('child_process');
+      const fonts = await new Promise((resolve) => {
+        exec(
+          `powershell -NoProfile -Command "[System.Reflection.Assembly]::LoadWithPartialName('System.Drawing') | Out-Null; [System.Drawing.FontFamily]::Families | Select-Object -ExpandProperty Name"`,
+          { timeout: 5000, windowsHide: true },
+          (err, stdout) => {
+            if (err || !stdout) {
+              resolve([]);
+            } else {
+              const list = stdout
+                .split(/\\r?\\n/)
+                .map(f => f.trim())
+                .filter(f => f && !f.startsWith('@'));
+              resolve(Array.from(new Set(list)).sort((a, b) => a.localeCompare(b)));
+            }
+          }
+        );
+      });
+      if (fonts && fonts.length > 0) {
+        cachedSystemFonts = fonts;
+        return fonts;
+      }
+    } catch (e) {
+      console.warn('Error reading system fonts:', e);
+    }
+  }
+
+  // Safe fallback fonts
+  const fallbacks = [
+    'Arial', 'Bahnschrift', 'Calibri', 'Cambria', 'Candara', 'Cascadia Code', 'Cascadia Mono',
+    'Comic Sans MS', 'Consolas', 'Constantia', 'Corbel', 'Courier New', 'Ebrima', 'Franklin Gothic Medium',
+    'Gabriola', 'Gadugi', 'Georgia', 'Impact', 'Ink Free', 'Lucida Console', 'Lucida Sans Unicode',
+    'Malgun Gothic', 'Microsoft Sans Serif', 'Palatino Linotype', 'Segoe Print', 'Segoe Script',
+    'Segoe UI', 'Segoe UI Variable Display', 'Segoe UI Variable Text', 'Sitka Text', 'Sylfaen',
+    'Tahoma', 'Times New Roman', 'Trebuchet MS', 'Verdana'
+  ];
+  cachedSystemFonts = fallbacks;
+  return fallbacks;
 });
 
 // Local Asset Image Saver (for clipboard paste and drag & drop)
