@@ -260,7 +260,7 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
     editorProps: {
       attributes: {
         class: `prose dark:prose-invert max-w-none focus:outline-none min-h-[calc(100vh-150px)] px-12 pt-6 pb-32 ${tab.isReadOnly ? 'cursor-default' : ''}`,
-        style: `font-size: ${settings.fontSize}px; line-height: ${settings.lineHeight}; font-family: var(--editor-font-family)`,
+        style: `font-size: ${settings.fontSize}px; line-height: ${settings.lineHeight}; font-family: ${resolveFontFamily(settings)} !important;`,
         spellcheck: settings.spellCheck ? 'true' : 'false',
       },
       handleDOMEvents: {
@@ -445,25 +445,41 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
   }, [editor, tab.content, tab.isReadOnly, settings.isDark, tab.filePath]);
 
   useEffect(() => {
-    if (!editor?.view?.dom) return;
-    const dom = editor.view.dom;
+    if (!editor) return;
     const font = resolveFontFamily(settings);
-    dom.style.setProperty('font-family', font, 'important');
-    dom.style.setProperty('--editor-font-family', font, 'important');
-    dom.style.setProperty('font-size', `${settings.fontSize}px`, 'important');
-    dom.style.setProperty('line-height', `${settings.lineHeight}`, 'important');
-    if (!settings.wordWrap) {
-      dom.style.whiteSpace = 'pre';
-      dom.style.overflowX = 'auto';
-    } else {
-      dom.style.whiteSpace = 'normal';
-      dom.style.overflowX = 'visible';
+    // 1. Keep ProseMirror editorProps attributes up-to-date so typing or transactions don't reset font
+    editor.setOptions({
+      editorProps: {
+        attributes: {
+          class: `prose dark:prose-invert max-w-none focus:outline-none min-h-[calc(100vh-150px)] px-12 pt-6 pb-32 ${tab.isReadOnly ? 'cursor-default' : ''}`,
+          style: `font-size: ${settings.fontSize}px; line-height: ${settings.lineHeight}; font-family: ${font} !important;`,
+          spellcheck: settings.spellCheck ? 'true' : 'false',
+        },
+      },
+    });
+
+    // 2. Direct DOM styling
+    if (editor.view?.dom) {
+      const dom = editor.view.dom;
+      dom.style.setProperty('font-family', font, 'important');
+      dom.style.setProperty('--editor-font-family', font, 'important');
+      dom.style.setProperty('font-size', `${settings.fontSize}px`, 'important');
+      dom.style.setProperty('line-height', `${settings.lineHeight}`, 'important');
+      if (!settings.wordWrap) {
+        dom.style.whiteSpace = 'pre';
+        dom.style.overflowX = 'auto';
+      } else {
+        dom.style.whiteSpace = 'normal';
+        dom.style.overflowX = 'visible';
+      }
     }
-  }, [editor, settings.fontSize, settings.lineHeight, settings.fontFamily, settings.customFontFamily, settings.wordWrap]);
+  }, [editor, settings.fontSize, settings.lineHeight, settings.fontFamily, settings.customFontFamily, settings.wordWrap, tab.isReadOnly]);
+
+  const activeFont = resolveFontFamily(settings);
 
   return (
-    <div style={{ display: isActive ? 'block' : 'none' }} className="h-full w-full relative">
-      <EditorContent editor={editor} className="h-full" />
+    <div style={{ display: isActive ? 'block' : 'none', fontFamily: activeFont }} className="h-full w-full relative">
+      <EditorContent editor={editor} className="h-full" style={{ fontFamily: activeFont }} />
     </div>
   );
 };
@@ -632,6 +648,7 @@ function App() {
     document.documentElement.style.setProperty('--accent-bg', themeColors.accentBg);
     const font = resolveFontFamily(settings);
     document.documentElement.style.setProperty('--editor-font-family', font);
+    document.body.style.setProperty('--editor-font-family', font);
     document.documentElement.style.setProperty('--editor-font-size', `${settings.fontSize}px`);
     document.documentElement.style.setProperty('--editor-line-height', `${settings.lineHeight}`);
     if (settings.applyFontToUI) {
@@ -998,6 +1015,12 @@ function App() {
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
+      if (mod && !e.shiftKey && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        const t: Tab = { id: Date.now().toString(), filePath: null, fileName: 'Untitled.md', content: '', isUnsaved: false, isReadOnly: determineDefaultReadOnly(null, settings.defaultMode) };
+        setTabs(ts => [...ts, t]);
+        setActiveTabId(t.id);
+      }
       if (mod && e.key === 's') { e.preventDefault(); handleSave(activeTabId, e.shiftKey); }
       if (mod && e.key.toLowerCase() === 'e') { e.preventDefault(); setIsExportOpen(true); }
       if (mod && e.key.toLowerCase() === 'p') { e.preventDefault(); window.print(); }
@@ -1013,14 +1036,14 @@ function App() {
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [activeTabId, tabs]);
+  }, [activeTabId, tabs, settings.defaultMode]);
 
 
   const closeTab = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     delete editorsRef.current[id];
     let nt = tabs.filter(t => t.id !== id);
-    if (!nt.length) nt = [{ id: Date.now().toString(), filePath: null, fileName: 'Untitled.md', content: '', isUnsaved: false, isReadOnly: false }];
+    if (!nt.length) nt = [{ id: Date.now().toString(), filePath: null, fileName: 'Untitled.md', content: '', isUnsaved: false, isReadOnly: determineDefaultReadOnly(null, settings.defaultMode) }];
     setTabs(nt);
     if (activeTabId === id) setActiveTabId(nt[nt.length - 1].id);
   };
@@ -1155,7 +1178,7 @@ function App() {
                   <button onClick={e => closeTab(tab.id, e)} className="p-0.5 rounded-full shrink-0 opacity-60 hover:opacity-100 transition-opacity"><X size={12} /></button>
                 </div>
               ))}
-              <button onClick={() => { const t: Tab = { id: Date.now().toString(), filePath: null, fileName: 'Untitled.md', content: '', isUnsaved: false, isReadOnly: settings.defaultMode === 'read' }; setTabs([...tabs, t]); setActiveTabId(t.id); }}
+              <button onClick={() => { const t: Tab = { id: Date.now().toString(), filePath: null, fileName: 'Untitled.md', content: '', isUnsaved: false, isReadOnly: determineDefaultReadOnly(null, settings.defaultMode) }; setTabs([...tabs, t]); setActiveTabId(t.id); }}
                 className="p-2.5 shrink-0 h-full" style={{ color: dk ? '#52525b' : '#71717a' }}><Plus size={15} /></button>
             </div>
           </div>
@@ -1249,12 +1272,13 @@ function App() {
                 <div className="h-full w-1/3 animate-loading-bar rounded-full" style={{ backgroundColor: themeColors.accent }} />
               </div>
             )}
-            <div className="mx-auto w-full min-h-full transition-all duration-300 relative group" 
+            <div className="mx-auto w-full min-h-full transition-all duration-300 relative group editor-paper" 
                  style={{ 
                    maxWidth: settings.editorMaxWidth, 
                    backgroundColor: dk ? '#151515' : '#ffffff',
                    border: `1px solid ${dk ? '#222' : '#e5e7eb'}`,
-                   boxShadow: dk ? 'none' : '0 1px 3px rgba(0,0,0,0.02)'
+                   boxShadow: dk ? 'none' : '0 1px 3px rgba(0,0,0,0.02)',
+                   fontFamily: resolveFontFamily(settings)
                  }}>
               <div className="absolute top-0 bottom-0 -left-2 w-4 cursor-ew-resize opacity-0 group-hover:opacity-30 hover:!opacity-100 flex items-center justify-center z-10 transition-opacity" onMouseDown={e => startEditorResize(e, 'left')}>
                 <div className="h-12 w-1 rounded-full bg-gray-400 dark:bg-gray-500 hover:bg-blue-500 dark:hover:bg-blue-400 transition-colors" />
@@ -1279,7 +1303,7 @@ function App() {
                       display: activeTabId === tab.id && isSourceMode ? 'block' : 'none', 
                       fontSize: settings.fontSize, 
                       lineHeight: settings.lineHeight, 
-                      fontFamily: 'monospace',
+                      fontFamily: resolveFontFamily(settings),
                       whiteSpace: settings.wordWrap ? 'pre-wrap' : 'pre',
                       overflowX: settings.wordWrap ? 'hidden' : 'auto',
                       color: dk ? '#e4e4e7' : '#18181b'
@@ -1287,7 +1311,7 @@ function App() {
                     spellCheck={settings.spellCheck}
                     readOnly={tab.isReadOnly}
                   />
-                  <div style={{ display: activeTabId === tab.id && !isSourceMode ? 'block' : 'none' }}>
+                  <div style={{ display: activeTabId === tab.id && !isSourceMode ? 'block' : 'none', fontFamily: resolveFontFamily(settings) }}>
                     <EditorComponent tab={tab} isActive={activeTabId === tab.id && !isSourceMode}
                       setUnsaved={handleSetUnsaved}
                       onEditorActive={setActiveEditor} 

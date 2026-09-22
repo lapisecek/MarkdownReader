@@ -117,7 +117,7 @@ The application supports mathematical typesetting via offline-bundled KaTeX, int
 ### Installation
 
 1. Go to the [Releases](https://github.com/lapisecek/MarkdownReader/releases) page.
-2. Download `MarkdownReader-v2.0.2-win32-x64.zip`.
+2. Download `MarkdownReader-v2.0.3-win32-x64.zip`.
 3. Extract the archive and launch `MarkdownReader.exe`.
 
 ### Windows Setup Assistant
@@ -177,7 +177,7 @@ npm run electron:build
 Generated outputs:
 - `dist-electron/MarkdownReader-win32-x64/`
 - `dist-electron/win-unpacked/`
-- `dist-electron/MarkdownReader-v2.0.2-win32-x64.zip`
+- `dist-electron/MarkdownReader-v2.0.3-win32-x64.zip`
 
 ---
 

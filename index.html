@@ -27,6 +27,21 @@
               document.documentElement.style.backgroundColor = '#fcfcfc';
               document.documentElement.style.color = '#334155';
             }
+            var font = '';
+            var custom = (parsed.customFontFamily || '').trim().replace(/["']/g, '');
+            if (parsed.fontFamily === 'mono') {
+              font = '"Cascadia Code", "Cascadia Mono", Consolas, "Courier New", monospace';
+            } else if (parsed.fontFamily === 'serif') {
+              font = 'Georgia, Cambria, "Times New Roman", Times, serif';
+            } else if (parsed.fontFamily === 'custom' && custom) {
+              font = '"' + custom + '", "Segoe UI", -apple-system, system-ui, sans-serif';
+            } else {
+              font = '"Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif';
+            }
+            document.documentElement.style.setProperty('--editor-font-family', font);
+            if (parsed.applyFontToUI) {
+              document.documentElement.style.setProperty('--app-font-family', font);
+            }
           }
         } catch(e) {}
       })();

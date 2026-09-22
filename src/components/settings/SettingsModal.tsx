@@ -57,23 +57,23 @@ export const resolveFontFamily = (settings: AppSettings): string => {
   const custom = (settings.customFontFamily || '').trim().replace(/["']/g, '');
   if (settings.fontFamily === 'custom') {
     if (custom) {
-      return `"${custom}", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+      return `"${custom}", "Segoe UI", -apple-system, system-ui, sans-serif`;
     }
-    return 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    return '"Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif';
   }
   if (settings.fontFamily === 'mono') {
-    return 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
+    return '"Cascadia Code", "Cascadia Mono", Consolas, "Courier New", monospace';
   }
   if (settings.fontFamily === 'serif') {
     return 'Georgia, Cambria, "Times New Roman", Times, serif';
   }
   if (settings.fontFamily === 'sans') {
-    return 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    return '"Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif';
   }
   if (custom) {
-    return `"${custom}", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    return `"${custom}", "Segoe UI", -apple-system, system-ui, sans-serif`;
   }
-  return 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  return '"Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif';
 };
 
 export const POPULAR_FONTS = [

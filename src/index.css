@@ -12,6 +12,7 @@
     --panel-border: #2a2a2a;
     --hover-bg: #2a2a2a;
     --active-bg: #121212;
+    --editor-font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   }
   :root:not(.dark) {
     --bg-color: #fcfcfc;
@@ -55,10 +56,15 @@
 ::-webkit-scrollbar-thumb:hover { background-color: rgba(128,128,128,0.5); }
 ::-webkit-scrollbar-corner { background: transparent; }
 
+/* Editor Paper Container */
+.editor-paper {
+  font-family: var(--editor-font-family, inherit) !important;
+}
+
 /* Tiptap */
 .ProseMirror {
   @apply outline-none min-h-full pb-32 leading-relaxed;
-  font-family: var(--editor-font-family, system-ui, -apple-system, sans-serif) !important;
+  font-family: var(--editor-font-family, inherit) !important;
 }
 
 .ProseMirror *:not(code):not(pre):not(pre *):not([class*="katex"]):not([class*="mermaid"]) {
