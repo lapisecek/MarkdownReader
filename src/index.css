@@ -62,6 +62,10 @@
   font-family: inherit !important;
 }
 
+.ProseMirror h1, .ProseMirror h2, .ProseMirror h3, .ProseMirror h4, .ProseMirror p, .ProseMirror ul, .ProseMirror ol, .ProseMirror li, .ProseMirror blockquote, .ProseMirror table {
+  font-family: inherit !important;
+}
+
 .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder); float: left; color: var(--text-muted); pointer-events: none; height: 0;
 }

@@ -50,8 +50,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
 };
 
 export const resolveFontFamily = (settings: AppSettings): string => {
-  if (settings.fontFamily === 'custom' && settings.customFontFamily) {
-    return `"${settings.customFontFamily}", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+  const custom = (settings.customFontFamily || '').trim().replace(/["']/g, '');
+  if (settings.fontFamily === 'custom') {
+    if (custom) {
+      return `"${custom}", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    }
+    return 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
   }
   if (settings.fontFamily === 'mono') {
     return 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
@@ -62,11 +66,26 @@ export const resolveFontFamily = (settings: AppSettings): string => {
   if (settings.fontFamily === 'sans') {
     return 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
   }
-  if (settings.customFontFamily) {
-    return `"${settings.customFontFamily}", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+  if (custom) {
+    return `"${custom}", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
   }
   return 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
 };
+
+export const POPULAR_FONTS = [
+  'Cascadia Code',
+  'Consolas',
+  'Fira Code',
+  'JetBrains Mono',
+  'Segoe UI',
+  'Arial',
+  'Georgia',
+  'Times New Roman',
+  'Calibri',
+  'Trebuchet MS',
+  'Verdana',
+  'Courier New',
+];
 
 export const THEME_COLORS: Record<Exclude<AppTheme, 'custom'>, { accent: string, accentBg: string, label: string }> = {
   default: { accent: '#3b82f6', accentBg: 'rgba(59,130,246,0.12)', label: 'Default Blue' },
@@ -172,11 +191,45 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [colorInput, setColorInput] = useState(settings.customAccentColor || '#8b5cf6');
 
-  // Installed System Fonts State
+  // Installed System Fonts & Custom Font State
   const [systemFonts, setSystemFonts] = useState<string[]>([]);
   const [fontSearch, setFontSearch] = useState('');
   const [isFontDropdownOpen, setIsFontDropdownOpen] = useState(false);
+  const [customFontInput, setCustomFontInput] = useState(settings.customFontFamily || '');
+  const [hoveredFont, setHoveredFont] = useState<string | null>(null);
   const fontDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setCustomFontInput(settings.customFontFamily || '');
+  }, [settings.customFontFamily]);
+
+  const handleApplyCustomFont = (fontName: string) => {
+    const trimmed = fontName.trim();
+    setCustomFontInput(trimmed);
+    handleUpdate({
+      fontFamily: 'custom',
+      customFontFamily: trimmed,
+    });
+  };
+
+  const handleCustomFontInputChange = (value: string) => {
+    setCustomFontInput(value);
+    handleUpdate({
+      fontFamily: 'custom',
+      customFontFamily: value.trim(),
+    });
+  };
+
+  const activeFontFamilyString = useMemo(() => {
+    if (hoveredFont) {
+      return `"${hoveredFont}", system-ui, -apple-system, sans-serif`;
+    }
+    return resolveFontFamily({
+      ...settings,
+      fontFamily: settings.fontFamily,
+      customFontFamily: settings.fontFamily === 'custom' ? (customFontInput || settings.customFontFamily) : settings.customFontFamily,
+    });
+  }, [hoveredFont, settings, customFontInput]);
 
   useEffect(() => {
     if (window.api?.getSystemFonts) {
@@ -445,114 +498,207 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
 
                   {/* Standard Typeface Pills */}
-                  <div className="flex gap-1.5 bg-gray-100 dark:bg-gray-800 p-1 rounded-xl text-xs">
-                    {(['sans', 'mono', 'serif'] as EditorFontFamily[]).map(f => (
-                      <button
-                        key={f}
-                        onClick={() => handleUpdate({ fontFamily: f, customFontFamily: '' })}
-                        className={`flex-1 py-1.5 rounded-lg capitalize font-medium transition-all ${
-                          settings.fontFamily === f && !settings.customFontFamily
-                            ? 'bg-white dark:bg-[#121212] shadow-sm font-semibold'
-                            : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
-                        }`}
-                        style={settings.fontFamily === f && !settings.customFontFamily ? { color: themeColors.accent } : {}}
-                      >
-                        {f === 'sans' ? 'Sans-Serif' : f === 'mono' ? 'Monospace' : 'Serif'}
-                      </button>
-                    ))}
+                  <div className="grid grid-cols-4 gap-1.5 bg-gray-100 dark:bg-gray-800/80 p-1.5 rounded-xl text-xs">
+                    {(['sans', 'mono', 'serif'] as EditorFontFamily[]).map(f => {
+                      const isSelected = settings.fontFamily === f;
+                      return (
+                        <button
+                          key={f}
+                          onClick={() => {
+                            handleUpdate({ fontFamily: f, customFontFamily: '' });
+                            setHoveredFont(null);
+                          }}
+                          className={`py-2 px-2.5 rounded-lg font-medium transition-all flex items-center justify-center gap-1.5 ${
+                            isSelected
+                              ? 'bg-white dark:bg-[#121212] shadow-sm font-semibold'
+                              : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+                          }`}
+                          style={isSelected ? { color: themeColors.accent } : {}}
+                        >
+                          <Type size={13} />
+                          <span className="capitalize">{f === 'sans' ? 'Sans-Serif' : f === 'mono' ? 'Monospace' : 'Serif'}</span>
+                        </button>
+                      );
+                    })}
                     <button
-                      onClick={() => setIsFontDropdownOpen(p => !p)}
-                      className={`flex-1 py-1.5 rounded-lg font-medium transition-all flex items-center justify-center gap-1 ${
-                        settings.customFontFamily
+                      onClick={() => {
+                        const targetFont = customFontInput.trim() || settings.customFontFamily.trim() || 'Consolas';
+                        handleApplyCustomFont(targetFont);
+                      }}
+                      className={`py-2 px-2.5 rounded-lg font-medium transition-all flex items-center justify-center gap-1.5 ${
+                        settings.fontFamily === 'custom'
                           ? 'bg-white dark:bg-[#121212] shadow-sm font-semibold'
                           : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
                       }`}
-                      style={settings.customFontFamily ? { color: themeColors.accent } : {}}
+                      style={settings.fontFamily === 'custom' ? { color: themeColors.accent } : {}}
                     >
-                      <Type size={13} />
-                      <span className="truncate max-w-[80px]">{settings.customFontFamily || 'Installed...'}</span>
-                      <ChevronDown size={12} className={`transition-transform ${isFontDropdownOpen ? 'rotate-180' : ''}`} />
+                      <Sparkles size={13} />
+                      <span className="truncate max-w-[90px]">
+                        {settings.fontFamily === 'custom' && (customFontInput || settings.customFontFamily)
+                          ? (customFontInput || settings.customFontFamily)
+                          : 'Custom'}
+                      </span>
                     </button>
                   </div>
 
-                  {/* Active Font Live Preview */}
-                  <div className="flex items-center justify-between px-3 py-2 rounded-lg bg-gray-50 dark:bg-[#1e1e1e] border border-gray-200 dark:border-gray-800 text-xs">
-                    <span className="font-semibold text-[10px] text-gray-400 uppercase tracking-wider shrink-0 mr-2">
-                      Active: {settings.fontFamily === 'custom' ? (settings.customFontFamily || 'Custom') : settings.fontFamily.toUpperCase()}
-                    </span>
-                    <span style={{ fontFamily: resolveFontFamily(settings) }} className="text-sm truncate max-w-[320px] text-gray-800 dark:text-gray-200">
-                      The quick brown fox jumps over the lazy dog. 12345
-                    </span>
-                  </div>
-
-                  {/* System Fonts Dropdown Menu with Search Bar */}
-                  {isFontDropdownOpen && (
-                    <div
-                      ref={fontDropdownRef}
-                      className="p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#171717] shadow-xl space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-150"
-                    >
-                      {/* Search Bar */}
-                      <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#202020]">
-                        <Search size={14} className="text-gray-400 shrink-0" />
-                        <input
-                          type="text"
-                          value={fontSearch}
-                          onChange={e => setFontSearch(e.target.value)}
-                          placeholder="Search installed fonts (e.g. Cascadia, Segoe, Arial)..."
-                          className="bg-transparent outline-none text-xs w-full text-gray-800 dark:text-gray-200 placeholder-gray-400"
-                          autoFocus
-                        />
-                        {fontSearch && (
-                          <button onClick={() => setFontSearch('')} className="p-0.5 text-gray-400 hover:text-gray-600">
-                            <X size={13} />
-                          </button>
-                        )}
+                  {/* Custom Font Studio (Active when custom is selected) */}
+                  {settings.fontFamily === 'custom' && (
+                    <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-[#181818] space-y-3.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-xs font-semibold text-gray-700 dark:text-gray-200 flex items-center gap-1.5">
+                            <Pen size={12} style={{ color: themeColors.accent }} /> Custom Font Family Name
+                          </label>
+                          <span className="text-[10px] text-gray-400">Updates editor in real-time</span>
+                        </div>
+                        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#202020] shadow-sm">
+                          <Type size={14} className="text-gray-400 shrink-0" />
+                          <input
+                            type="text"
+                            value={customFontInput}
+                            onChange={e => handleCustomFontInputChange(e.target.value)}
+                            placeholder="Type any installed font name (e.g. Cascadia Code, JetBrains Mono, Fira Code)..."
+                            className="bg-transparent outline-none text-xs w-full text-gray-800 dark:text-gray-200 placeholder-gray-400 font-medium"
+                            autoFocus
+                          />
+                          {customFontInput && (
+                            <button
+                              onClick={() => handleCustomFontInputChange('')}
+                              className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded"
+                              title="Clear font input"
+                            >
+                              <X size={13} />
+                            </button>
+                          )}
+                        </div>
                       </div>
 
-                      {/* Font List */}
-                      <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
-                        {filteredFonts.length === 0 ? (
-                          <div className="text-xs text-center py-4 text-gray-400">No matching fonts found.</div>
-                        ) : (
-                          filteredFonts.map(fontName => {
-                            const isSelected = settings.customFontFamily === fontName;
+                      {/* Quick Popular Fonts Presets */}
+                      <div>
+                        <div className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1.5">Popular Coding & Writing Fonts:</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {POPULAR_FONTS.map(pf => {
+                            const isCurrent = (customFontInput || settings.customFontFamily).toLowerCase() === pf.toLowerCase();
                             return (
                               <button
-                                key={fontName}
-                                onClick={() => {
-                                  handleUpdate({
-                                    fontFamily: 'custom',
-                                    customFontFamily: fontName,
-                                  });
-                                  setIsFontDropdownOpen(false);
-                                }}
-                                className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-left transition-colors ${
-                                  isSelected
-                                    ? 'bg-blue-500/10 font-semibold text-blue-500'
-                                    : 'hover:bg-gray-100 dark:hover:bg-[#242424] text-gray-700 dark:text-gray-300'
+                                key={pf}
+                                onClick={() => handleApplyCustomFont(pf)}
+                                onMouseEnter={() => setHoveredFont(pf)}
+                                onMouseLeave={() => setHoveredFont(null)}
+                                className={`px-2.5 py-1 rounded-md text-[11px] transition-all border ${
+                                  isCurrent
+                                    ? 'bg-white dark:bg-[#222] font-semibold shadow-sm'
+                                    : 'bg-white/60 dark:bg-white/[0.03] border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-700'
                                 }`}
+                                style={isCurrent ? { borderColor: themeColors.accent, color: themeColors.accent } : {}}
                               >
-                                <span style={{ fontFamily: fontName }} className="truncate max-w-[280px]">
-                                  {fontName}
-                                </span>
-                                {isSelected && <Check size={14} className="shrink-0 text-blue-500" />}
+                                {pf}
                               </button>
                             );
-                          })
-                        )}
+                          })}
+                        </div>
                       </div>
 
-                      {/* Font Preview Sentence */}
-                      {settings.customFontFamily && (
-                        <div className="pt-2 border-t border-gray-100 dark:border-gray-800 text-xs text-gray-500 dark:text-gray-400 flex items-center justify-between">
-                          <span className="font-semibold text-[11px] text-gray-400 uppercase tracking-wider">Preview:</span>
-                          <span style={{ fontFamily: settings.customFontFamily }} className="text-sm truncate max-w-[340px] text-gray-800 dark:text-gray-200">
-                            The quick brown fox jumps over the lazy dog.
+                      {/* Installed Windows System Fonts Browser */}
+                      <div className="pt-2 border-t border-gray-200 dark:border-gray-800">
+                        <button
+                          onClick={() => setIsFontDropdownOpen(p => !p)}
+                          className="flex items-center justify-between w-full text-xs text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white font-medium py-1 transition-colors"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <Search size={12} />
+                            Browse All Installed System Fonts ({systemFonts.length > 0 ? `${systemFonts.length} detected` : 'scanning...'})
                           </span>
-                        </div>
-                      )}
+                          <ChevronDown size={14} className={`transition-transform duration-200 ${isFontDropdownOpen ? 'rotate-180' : ''}`} />
+                        </button>
+
+                        {isFontDropdownOpen && (
+                          <div className="mt-2.5 p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] shadow-lg space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                            <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#222]">
+                              <Search size={13} className="text-gray-400 shrink-0" />
+                              <input
+                                type="text"
+                                value={fontSearch}
+                                onChange={e => setFontSearch(e.target.value)}
+                                placeholder="Search system fonts..."
+                                className="bg-transparent outline-none text-xs w-full text-gray-800 dark:text-gray-200 placeholder-gray-400"
+                              />
+                              {fontSearch && (
+                                <button onClick={() => setFontSearch('')} className="p-0.5 text-gray-400 hover:text-gray-600">
+                                  <X size={12} />
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="max-h-48 overflow-y-auto space-y-0.5 pr-1">
+                              {filteredFonts.length === 0 ? (
+                                <div className="text-xs text-center py-4 text-gray-400">No matching fonts found.</div>
+                              ) : (
+                                filteredFonts.map(fontName => {
+                                  const isSelected = (customFontInput || settings.customFontFamily).toLowerCase() === fontName.toLowerCase();
+                                  return (
+                                    <button
+                                      key={fontName}
+                                      onClick={() => handleApplyCustomFont(fontName)}
+                                      onMouseEnter={() => setHoveredFont(fontName)}
+                                      onMouseLeave={() => setHoveredFont(null)}
+                                      className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-xs text-left transition-colors ${
+                                        isSelected
+                                          ? 'font-semibold'
+                                          : 'hover:bg-gray-100 dark:hover:bg-[#252525] text-gray-700 dark:text-gray-300'
+                                      }`}
+                                      style={isSelected ? { backgroundColor: themeColors.accentBg, color: themeColors.accent } : {}}
+                                    >
+                                      <span style={{ fontFamily: `"${fontName}", sans-serif` }} className="truncate max-w-[280px]">
+                                        {fontName}
+                                      </span>
+                                      {isSelected && <Check size={14} className="shrink-0" style={{ color: themeColors.accent }} />}
+                                    </button>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
+
+                  {/* Prominent Live Font Interactive Preview Card */}
+                  <div className="p-4 rounded-xl bg-gray-50/80 dark:bg-[#181818] border border-gray-200 dark:border-gray-800 space-y-2.5">
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-[10px] text-gray-400 uppercase tracking-wider">
+                          Active Font:
+                        </span>
+                        <span className="font-semibold px-2 py-0.5 rounded-md text-[11px]" style={{ backgroundColor: themeColors.accentBg, color: themeColors.accent }}>
+                          {hoveredFont ? `${hoveredFont} (Previewing)` : (settings.fontFamily === 'custom' ? (customFontInput || settings.customFontFamily || 'Custom Font') : settings.fontFamily.toUpperCase())}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-gray-400 font-mono">
+                        {settings.fontSize}px / {settings.lineHeight}
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        fontFamily: activeFontFamilyString,
+                        fontSize: `${settings.fontSize}px`,
+                        lineHeight: settings.lineHeight,
+                      }}
+                      className="p-3.5 rounded-lg bg-white dark:bg-[#202020] border border-gray-200/80 dark:border-gray-700/60 text-gray-800 dark:text-gray-100 space-y-1.5 transition-all overflow-hidden"
+                    >
+                      <div className="font-bold text-base tracking-tight truncate">
+                        The Quick Brown Fox Jumps Over The Lazy Dog
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-gray-300 truncate">
+                        Sphinx of black quartz, judge my vow. 0123456789 — $ % & @ * + / =
+                      </div>
+                      <div className="text-[11px] text-gray-400 dark:text-gray-500 font-normal tracking-wide truncate">
+                        ABCDEFGHIJKLMNOPQRSTUVWXYZ abcdefghijklmnopqrstuvwxyz
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

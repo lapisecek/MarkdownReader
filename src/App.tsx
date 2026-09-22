@@ -449,6 +449,7 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
     const dom = editor.view.dom;
     const font = resolveFontFamily(settings);
     dom.style.setProperty('font-family', font, 'important');
+    dom.style.setProperty('--editor-font-family', font, 'important');
     dom.style.setProperty('font-size', `${settings.fontSize}px`, 'important');
     dom.style.setProperty('line-height', `${settings.lineHeight}`, 'important');
     if (!settings.wordWrap) {
