@@ -1,47 +1,54 @@
-import mermaid from 'mermaid';
-
+let mermaidPromise: Promise<typeof import('mermaid').default> | null = null;
 let lastTheme: boolean | null = null;
 
-export function initMermaid(isDark: boolean) {
-  if (lastTheme === isDark) return;
-  mermaid.initialize({
-    startOnLoad: false,
-    theme: isDark ? 'dark' : 'default',
-    securityLevel: 'loose',
-    fontFamily: 'inherit',
-    themeVariables: isDark ? {
-      darkMode: true,
-      background: '#1a1a1a',
-      primaryColor: '#3b82f6',
-      primaryTextColor: '#f3f4f6',
-      primaryBorderColor: '#2563eb',
-      lineColor: '#9ca3af',
-      secondaryColor: '#1e293b',
-      tertiaryColor: '#111827',
-    } : {
-      primaryColor: '#3b82f6',
-      primaryTextColor: '#1f2937',
-      primaryBorderColor: '#93c5fd',
-      lineColor: '#6b7280',
-    }
-  });
-  lastTheme = isDark;
+export async function getMermaid(isDark: boolean) {
+  if (!mermaidPromise) {
+    mermaidPromise = import('mermaid').then(m => m.default);
+  }
+  const mermaid = await mermaidPromise;
+  if (lastTheme !== isDark) {
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: isDark ? 'dark' : 'default',
+      securityLevel: 'loose',
+      fontFamily: 'inherit',
+      themeVariables: isDark ? {
+        darkMode: true,
+        background: '#1a1a1a',
+        primaryColor: '#3b82f6',
+        primaryTextColor: '#f3f4f6',
+        primaryBorderColor: '#2563eb',
+        lineColor: '#9ca3af',
+        secondaryColor: '#1e293b',
+        tertiaryColor: '#111827',
+      } : {
+        primaryColor: '#3b82f6',
+        primaryTextColor: '#1f2937',
+        primaryBorderColor: '#93c5fd',
+        lineColor: '#6b7280',
+      }
+    });
+    lastTheme = isDark;
+  }
+  return mermaid;
 }
 
 export async function renderMermaidDiagrams(container: HTMLElement, isDark: boolean) {
-  initMermaid(isDark);
-
   const mermaidBlocks = container.querySelectorAll('pre code.language-mermaid');
-  mermaidBlocks.forEach(async (codeElement, idx) => {
+  if (mermaidBlocks.length === 0) return;
+
+  const mermaid = await getMermaid(isDark);
+  for (let idx = 0; idx < mermaidBlocks.length; idx++) {
+    const codeElement = mermaidBlocks[idx];
     const pre = codeElement.parentElement;
-    if (!pre) return;
+    if (!pre) continue;
 
     // Check if already processed
-    if (pre.getAttribute('data-mermaid-processed') === 'true') return;
+    if (pre.getAttribute('data-mermaid-processed') === 'true') continue;
     pre.setAttribute('data-mermaid-processed', 'true');
 
     const sourceCode = codeElement.textContent || '';
-    if (!sourceCode.trim()) return;
+    if (!sourceCode.trim()) continue;
 
     const diagramWrapper = document.createElement('div');
     diagramWrapper.className = 'mermaid-container my-6 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-white/[0.02] overflow-hidden transition-all shadow-sm';
@@ -94,5 +101,5 @@ export async function renderMermaidDiagrams(container: HTMLElement, isDark: bool
         toggleBtn.textContent = 'View Source';
       }
     });
-  });
+  }
 }

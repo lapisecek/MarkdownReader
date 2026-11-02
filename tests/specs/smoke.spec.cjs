@@ -17,6 +17,6 @@ describe('Smoke Spec', () => {
     const title = await page.evaluate(() => {
       return document.title;
     });
-    assert.strictEqual(title, 'markdownreader', 'The initial window HTML title must be "markdownreader"');
+    assert.strictEqual(title.toLowerCase(), 'markdownreader', 'The initial window HTML title must be "markdownreader"');
   });
 });

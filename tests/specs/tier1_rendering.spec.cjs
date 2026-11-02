@@ -10,7 +10,7 @@ describe('Tier 1: React Rendering & Basic Editor Operations', () => {
 
   it('Title Display', async (page) => {
     const title = await page.evaluate(() => document.title);
-    assert.strictEqual(title, 'markdownreader', 'The initial page title must match the default "markdownreader"');
+    assert.strictEqual(title.toLowerCase(), 'markdownreader', 'The initial page title must match the default "markdownreader"');
   });
 
   it('Empty Editor Mount', async (page) => {

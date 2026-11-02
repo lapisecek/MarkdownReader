@@ -39,7 +39,12 @@ async function main() {
   }
 
   const files = fs.readdirSync(specsDir);
-  const specFiles = files.filter(f => f.endsWith('.spec.cjs'));
+  let specFiles = files.filter(f => f.endsWith('.spec.cjs'));
+  const argSpec = process.argv[2];
+  if (argSpec) {
+    const base = path.basename(argSpec);
+    specFiles = specFiles.filter(f => f === base || f === argSpec);
+  }
 
   if (specFiles.length === 0) {
     console.log('No spec files found in tests/specs/');
@@ -94,9 +99,12 @@ function runSpec(electronBin, specPath) {
     
     // Spawn electron process
     const isCmd = electronBin.endsWith('.cmd') || electronBin === 'electron';
+    const spawnEnv = { ...process.env };
+    delete spawnEnv.ELECTRON_RUN_AS_NODE;
     const child = spawn(electronBin, [runnerMain, `--spec=${specPath}`], {
       stdio: ['inherit', 'pipe', 'pipe'],
-      shell: isCmd
+      shell: isCmd,
+      env: spawnEnv,
     });
 
     let stdoutData = '';

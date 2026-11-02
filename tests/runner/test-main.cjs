@@ -200,6 +200,11 @@ app.whenReady().then(async () => {
 
 async function waitForWindow() {
   while (!capturedWindow) {
+    const wins = OriginalBrowserWindow.getAllWindows();
+    if (wins.length > 0) {
+      capturedWindow = wins[0];
+      break;
+    }
     await new Promise(resolve => setTimeout(resolve, 50));
   }
 }

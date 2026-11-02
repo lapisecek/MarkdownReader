@@ -160,6 +160,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${baseTitle}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
   <style>
     :root {
       --accent: ${themeAccent};
@@ -194,6 +195,15 @@ export const ExportModal: React.FC<ExportModalProps> = ({
     th { background: var(--code-bg); font-weight: 600; }
     img { max-width: 100%; height: auto; border-radius: 8px; margin: 1em 0; }
     hr { border: none; border-top: 1px solid var(--border); margin: 2em 0; }
+    u { text-decoration: underline; text-underline-offset: 3px; }
+    kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 0.85em; padding: 0.15em 0.45em; border-radius: 4px; background: var(--code-bg); border: 1px solid var(--border); box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
+    details { margin: 1.25em 0; padding: 0.75rem 1rem; border-radius: 8px; border: 1px solid var(--border); background: var(--code-bg); }
+    summary { font-weight: 600; cursor: pointer; user-select: none; }
+    div[align="center"], center { text-align: center; }
+    div[align="right"] { text-align: right; }
+    div[align="left"] { text-align: left; }
+    div[align="justify"] { text-align: justify; }
+    .katex-math-block { margin: 1.25em 0; overflow-x: auto; text-align: center; padding: 0.5rem 0.75rem; border-radius: 8px; border: 1px solid var(--border); background: var(--code-bg); }
     .mermaid-container svg { max-width: 100%; height: auto; }
     @media print {
       body { background: white !important; color: black !important; padding: 0; }

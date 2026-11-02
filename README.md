@@ -71,6 +71,15 @@ The application supports mathematical typesetting via offline-bundled KaTeX, int
 - **Large Document Optimization**: ProseMirror indexing and search highlights are capped and optimized to maintain smooth scrolling and editing on large files.
 - **Background Task Indicators**: Progress indicators in the header and status bar inform the user during heavy file operations and large text processing.
 
+
+### HTML Elements & Rich Web Markup
+- **Native Underline & Formatting**: Full support for `<u>` and `<ins>` underline formatting, serialized seamlessly to Markdown with a dedicated Underline toolbar button.
+- **Keyboard Badges (`<kbd>`)**: Desktop-styled keyboard key badges (e.g. `<kbd>Ctrl</kbd> + <kbd>C</kbd>`) with elevation and subtle contrast borders.
+- **Collapsible Disclosure Widgets (`<details>` / `<summary>`)**: Interactive accordions for foldable notes, FAQs, and expandable documentation.
+- **Block Alignment (`<div align="...">` & `<center>`)**: Native support for text alignment (`center`, `right`, `left`, `justify`) and traditional `<center>` blocks.
+- **Inline Styling & Custom Colors**: Preserves custom font colors and styles from `<span style="...">` and `<font color="...">`.
+- **Raw HTML Embeds**: Clean rendering and isolation for `<iframe>`, `<video>`, `<audio>`, `<figure>`, `<canvas>`, and `<svg>` markup.
+
 ### KaTeX Math Formulas
 - Support for inline equations (`$E=mc^2$`) and display equation blocks (`$$\sum_{i=0}^n i$$`).
 - Bundled offline vector fonts (WOFF2 and TTF) for mathematical rendering without network connectivity.
@@ -117,7 +126,7 @@ The application supports mathematical typesetting via offline-bundled KaTeX, int
 ### Installation
 
 1. Go to the [Releases](https://github.com/lapisecek/MarkdownReader/releases) page.
-2. Download `MarkdownReader-v2.0.3-win32-x64.zip`.
+2. Download `MarkdownReader-v2.1.0-win32-x64.zip`.
 3. Extract the archive and launch `MarkdownReader.exe`.
 
 ### Windows Setup Assistant
@@ -177,7 +186,7 @@ npm run electron:build
 Generated outputs:
 - `dist-electron/MarkdownReader-win32-x64/`
 - `dist-electron/win-unpacked/`
-- `dist-electron/MarkdownReader-v2.0.3-win32-x64.zip`
+- `dist-electron/MarkdownReader-v2.1.0-win32-x64.zip`
 
 ---
 

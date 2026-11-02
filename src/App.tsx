@@ -1,11 +1,11 @@
-import { useEffect, useState, useRef, useCallback, useMemo, Fragment } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo, Fragment, lazy, Suspense } from 'react';
 import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from 'tiptap-markdown';
 import {
   X, Folder, File, FolderOpen, Plus, FileText, Save,
   PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Search, ArrowUp, ArrowDown,
-  Bold, Italic, Strikethrough, Code, List, ListOrdered, Quote, Terminal, Undo, Redo,
+  Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code, List, ListOrdered, Quote, Terminal, Undo, Redo,
   Minus, Square, Settings, Copy as CopyAllIcon,
   Eye, EyeOff,
   Pencil, ChevronUp, ChevronDown, BookOpen, AlignLeft, AlignCenter, AlignRight, AlignJustify, Table as TableIcon,
@@ -15,7 +15,7 @@ import {
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { createLowlight, common } from 'lowlight';
 import { SearchExtension } from './SearchExtension';
-import { Table } from '@tiptap/extension-table';
+import { CustomTable } from './extensions/CustomTable';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableCell } from '@tiptap/extension-table-cell';
 import { TableHeader } from '@tiptap/extension-table-header';
@@ -25,14 +25,16 @@ import { CustomImage } from './extensions/CustomImage';
 import { CustomTaskList, CustomTaskItem } from './extensions/TaskLists';
 import { CustomHighlight, CustomSubscript, CustomSuperscript } from './extensions/Marks';
 import { CustomHeading } from './extensions/Heading';
+import { CustomUnderline, CustomKbd, CustomHtmlSpan, Details, Summary, CustomDiv, CustomRawHtml } from './extensions/HtmlExtensions';
 import { FootnoteReference, Footnote, FootnoteContainer, FootnoteSep } from './extensions/Footnotes';
 import { DefList, DefTerm, DefDescription } from './extensions/DefList';
 import { Emoji } from './extensions/Emoji';
 import { MathInline, MathBlock } from './extensions/MathExtension';
-import { FullscreenImageViewer } from './components/FullscreenImageViewer';
-import { SettingsModal, type AppSettings, DEFAULT_SETTINGS, THEME_COLORS, resolveFontFamily } from './components/settings/SettingsModal';
-import { ExportModal } from './components/editor/ExportModal';
-import { WindowsIntegrationToast } from './components/WindowsIntegrationToast';
+const FullscreenImageViewer = lazy(() => import('./components/FullscreenImageViewer').then(m => ({ default: m.FullscreenImageViewer })));
+import { type AppSettings, DEFAULT_SETTINGS, THEME_COLORS, resolveFontFamily } from './types/settings';
+const SettingsModal = lazy(() => import('./components/settings/SettingsModal').then(m => ({ default: m.SettingsModal })));
+const ExportModal = lazy(() => import('./components/editor/ExportModal').then(m => ({ default: m.ExportModal })));
+const WindowsIntegrationToast = lazy(() => import('./components/WindowsIntegrationToast').then(m => ({ default: m.WindowsIntegrationToast })));
 import { renderMermaidDiagrams } from './utils/renderMermaid';
 import appIconImg from '../icon.ico';
 
@@ -200,16 +202,16 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ codeBlock: false, heading: false, link: false }),
+      StarterKit.configure({ codeBlock: false, heading: false, link: false, underline: false }),
       CustomHeading,
       Markdown,
       CodeBlockLowlight.configure({ lowlight, defaultLanguage: null }),
       SearchExtension,
-      Table.configure({ resizable: true }),
+      CustomTable.configure({ resizable: true }),
       TableRow,
       TableHeader,
       TableCell,
-      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      TextAlign.configure({ types: ['heading', 'paragraph', 'customDiv'] }),
       Link.configure({ openOnClick: false }),
       CustomImage,
       CustomTaskList,
@@ -217,6 +219,13 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
       CustomHighlight,
       CustomSubscript,
       CustomSuperscript,
+      CustomUnderline,
+      CustomKbd,
+      CustomHtmlSpan,
+      Details,
+      Summary,
+      CustomDiv,
+      CustomRawHtml,
       FootnoteSep,
       FootnoteContainer,
       FootnoteReference,
@@ -1350,6 +1359,7 @@ function App() {
                 <div className="flex items-center gap-1 overflow-x-auto flex-1 py-1" onWheel={e => { e.preventDefault(); smoothScroll(e.currentTarget, e.deltaY); }}>
                   <TB e={activeEditor} a="toggleBold" on={activeEditor.isActive('bold')} icon={<Bold size={13} />} t="Bold" ac={themeColors.accent} dk={dk} />
                   <TB e={activeEditor} a="toggleItalic" on={activeEditor.isActive('italic')} icon={<Italic size={13} />} t="Italic" ac={themeColors.accent} dk={dk} />
+                  <TB e={activeEditor} a="toggleUnderline" on={activeEditor.isActive('underline')} icon={<UnderlineIcon size={13} />} t="Underline" ac={themeColors.accent} dk={dk} />
                   <TB e={activeEditor} a="toggleStrike" on={activeEditor.isActive('strike')} icon={<Strikethrough size={13} />} t="Strike" ac={themeColors.accent} dk={dk} />
                   <TB e={activeEditor} a="toggleHighlight" on={activeEditor.isActive('highlight')} icon={<Highlighter size={13} />} t="Highlight" ac={themeColors.accent} dk={dk} />
                   <TB e={activeEditor} a="toggleSubscript" on={activeEditor.isActive('subscript')} icon={<SubscriptIcon size={13} />} t="Subscript" ac={themeColors.accent} dk={dk} />
@@ -1582,7 +1592,8 @@ function App() {
         <FAB onClick={() => setIsSettingsOpen(true)} icon={<Settings size={17} />} title="Settings (Ctrl+,)" on={false} accent={themeColors.accent} bg={themeColors.accentBg} dk={dk} anim={settings.animationsEnabled} />
       </div>
 
-      {isSettingsOpen && (
+      <Suspense fallback={null}>
+        {isSettingsOpen && (
         <SettingsModal
           settings={settings}
           onUpdate={updateSettings}
@@ -1606,6 +1617,7 @@ function App() {
           }}
         />
       )}
+      </Suspense>
 
 
       {/* Unsaved Changes Custom Dialog */}
@@ -1698,10 +1710,13 @@ function App() {
         </div>
       )}
       
-      {fullscreenImage && (
+      <Suspense fallback={null}>
+        {fullscreenImage && (
         <FullscreenImageViewer src={fullscreenImage} onClose={() => setFullscreenImage(null)} />
       )}
-      <WindowsIntegrationToast
+      </Suspense>
+      <Suspense fallback={null}>
+        <WindowsIntegrationToast
         themeAccent={themeColors.accent}
         isDark={dk}
         onToast={(msg) => {
@@ -1709,6 +1724,7 @@ function App() {
           setTimeout(() => setToastMessage(null), 3000);
         }}
       />
+      </Suspense>
       {toastMessage && (
         <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[400] px-4 py-2 rounded-full shadow-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-black text-sm font-medium animate-fade-in pointer-events-none">
           {toastMessage}

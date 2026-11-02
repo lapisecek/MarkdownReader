@@ -10,7 +10,11 @@ app.commandLine.appendSwitch('disable-background-networking');
 app.commandLine.appendSwitch('disable-component-update');
 app.commandLine.appendSwitch('disable-domain-reliability');
 app.commandLine.appendSwitch('disable-sync');
-app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion,SpareRendererForSitePerProcess');
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion,SpareRendererForSitePerProcess,WidgetLayering');
+app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-background-timer-throttling');
 
 const isDev = !app.isPackaged;
 
@@ -30,14 +34,7 @@ let fileToOpen = null;
 let directoryToOpen = null;
 let isRendererReady = false;
 
-// Handle Windows file association argument
-try {
-  if (process.defaultApp && process.argv.length >= 2) {
-    app.setAsDefaultProtocolClient('markdownreader', process.execPath, [path.resolve(process.argv[1])]);
-  } else {
-    app.setAsDefaultProtocolClient('markdownreader');
-  }
-} catch (e) {}
+// Default protocol client registration deferred post-window creation for fastest startup
 
 const gotTheLock = app.requestSingleInstanceLock();
 logToFile(`gotTheLock: ${gotTheLock}`);
@@ -61,6 +58,15 @@ if (!gotTheLock) {
 
   app.whenReady().then(() => {
     createWindow();
+    setTimeout(() => {
+      try {
+        if (process.defaultApp && process.argv.length >= 2) {
+          app.setAsDefaultProtocolClient('markdownreader', process.execPath, [path.resolve(process.argv[1])]);
+        } else {
+          app.setAsDefaultProtocolClient('markdownreader');
+        }
+      } catch (e) {}
+    }, 1000);
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });

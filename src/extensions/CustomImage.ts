@@ -32,8 +32,23 @@ export const CustomImage = Image.extend({
       },
       align: {
         default: 'center',
-        parseHTML: element => element.getAttribute('data-align') || 'center',
+        parseHTML: element => element.getAttribute('data-align') || element.getAttribute('align') || 'center',
         renderHTML: attributes => ({ 'data-align': attributes.align }),
+      },
+      width: {
+        default: null,
+        parseHTML: element => element.getAttribute('width') || element.style.width || null,
+        renderHTML: attributes => (attributes.width ? { width: attributes.width } : {}),
+      },
+      height: {
+        default: null,
+        parseHTML: element => element.getAttribute('height') || element.style.height || null,
+        renderHTML: attributes => (attributes.height ? { height: attributes.height } : {}),
+      },
+      style: {
+        default: null,
+        parseHTML: element => element.getAttribute('style') || null,
+        renderHTML: attributes => (attributes.style ? { style: attributes.style } : {}),
       },
     };
   },
