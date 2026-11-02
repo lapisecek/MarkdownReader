@@ -11,6 +11,27 @@ function decodeEntities(str: string): string {
     .replace(/&#39;/g, "'");
 }
 
+function extractLatexFromElement(element: HTMLElement | any): string {
+  if (!element || typeof element.getAttribute !== 'function') return '';
+  const dataLatex = element.getAttribute('data-latex');
+  if (dataLatex) return decodeEntities(dataLatex);
+
+  const annotation = element.querySelector?.('annotation');
+  if (annotation && annotation.textContent?.trim()) {
+    return decodeEntities(annotation.textContent.trim());
+  }
+
+  if (element.tagName?.toLowerCase() === 'annotation' && element.textContent?.trim()) {
+    return decodeEntities(element.textContent.trim());
+  }
+
+  if (element.tagName?.toLowerCase() === 'script' && element.getAttribute('type')?.startsWith('math/tex') && element.textContent?.trim()) {
+    return decodeEntities(element.textContent.trim());
+  }
+
+  return '';
+}
+
 export function markdownItMathPlugin(md: any) {
   if (md.__hasMathPlugin) return;
   md.__hasMathPlugin = true;
@@ -141,11 +162,14 @@ export const MathInline = Node.create({
     return {
       latex: {
         default: '',
-        parseHTML: element => decodeEntities(element.getAttribute('data-latex') || ''),
+        parseHTML: element => extractLatexFromElement(element),
       },
       display: {
         default: false,
-        parseHTML: element => element.getAttribute('data-display') === 'true' || element.classList.contains('katex-math-display'),
+        parseHTML: element =>
+          element.getAttribute('data-display') === 'true' ||
+          element.classList.contains('katex-math-display') ||
+          element.classList.contains('katex-display'),
       },
     };
   },
@@ -165,13 +189,8 @@ export const MathInline = Node.create({
           if (element.closest?.('.katex-math-inline') || element.closest?.('.katex-math-block') || element.closest?.('.katex-display')) {
             return false;
           }
-          const dataLatex = element.getAttribute('data-latex');
-          if (dataLatex) return { latex: decodeEntities(dataLatex) };
-          const annotation = element.querySelector('annotation');
-          if (annotation && annotation.textContent?.trim()) {
-            return { latex: decodeEntities(annotation.textContent.trim()) };
-          }
-          return false;
+          const latex = extractLatexFromElement(element);
+          return latex ? { latex } : false;
         },
       },
       {
@@ -181,11 +200,16 @@ export const MathInline = Node.create({
           if (element.closest?.('.katex-math-inline') || element.closest?.('.katex-math-block') || element.closest?.('.katex-display')) {
             return false;
           }
-          const annotation = element.querySelector('annotation');
-          if (annotation && annotation.textContent?.trim()) {
-            return { latex: decodeEntities(annotation.textContent.trim()) };
-          }
-          return false;
+          const latex = extractLatexFromElement(element);
+          return latex ? { latex } : false;
+        },
+      },
+      {
+        tag: 'script[type="math/tex"]',
+        getAttrs: (element: HTMLElement | string) => {
+          if (typeof element === 'string') return false;
+          const latex = element.textContent?.trim();
+          return latex ? { latex: decodeEntities(latex) } : false;
         },
       },
     ];
@@ -245,7 +269,7 @@ export const MathBlock = Node.create({
     return {
       latex: {
         default: '',
-        parseHTML: element => decodeEntities(element.getAttribute('data-latex') || ''),
+        parseHTML: element => extractLatexFromElement(element),
       },
     };
   },
@@ -263,13 +287,8 @@ export const MathBlock = Node.create({
         getAttrs: (element: HTMLElement | string) => {
           if (typeof element === 'string') return false;
           if (element.closest?.('.katex-math-block')) return false;
-          const dataLatex = element.getAttribute('data-latex');
-          if (dataLatex) return { latex: decodeEntities(dataLatex) };
-          const annotation = element.querySelector('annotation');
-          if (annotation && annotation.textContent?.trim()) {
-            return { latex: decodeEntities(annotation.textContent.trim()) };
-          }
-          return false;
+          const latex = extractLatexFromElement(element);
+          return latex ? { latex } : false;
         },
       },
       {
@@ -277,13 +296,16 @@ export const MathBlock = Node.create({
         getAttrs: (element: HTMLElement | string) => {
           if (typeof element === 'string') return false;
           if (element.closest?.('.katex-math-block')) return false;
-          const dataLatex = element.getAttribute('data-latex');
-          if (dataLatex) return { latex: decodeEntities(dataLatex) };
-          const annotation = element.querySelector('annotation');
-          if (annotation && annotation.textContent?.trim()) {
-            return { latex: decodeEntities(annotation.textContent.trim()) };
-          }
-          return false;
+          const latex = extractLatexFromElement(element);
+          return latex ? { latex } : false;
+        },
+      },
+      {
+        tag: 'script[type="math/tex; mode=display"]',
+        getAttrs: (element: HTMLElement | string) => {
+          if (typeof element === 'string') return false;
+          const latex = element.textContent?.trim();
+          return latex ? { latex: decodeEntities(latex) } : false;
         },
       },
     ];
