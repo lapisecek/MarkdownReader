@@ -8,7 +8,6 @@ async function build() {
   const rootDir = path.resolve(__dirname, '..');
   const distElectronDir = path.join(rootDir, 'dist-electron');
   const stageDir = path.join(distElectronDir, 'stage');
-  const outDir = path.join(distElectronDir, 'MarkdownReader-win32-x64');
   const winUnpackedDir = path.join(distElectronDir, 'win-unpacked');
 
   console.log('--- Step 0: Cleaning Previous Builds & Releasing Locks ---');
@@ -16,8 +15,9 @@ async function build() {
     execSync('powershell -NoProfile -Command "Get-Process -Name MarkdownReader -ErrorAction SilentlyContinue | Stop-Process -Force"', { stdio: 'ignore' });
   } catch (_) {}
 
-  if (fs.existsSync(outDir)) {
-    try { fs.rmSync(outDir, { recursive: true, force: true }); } catch (_) {}
+  const redundantOutDir = path.join(distElectronDir, 'MarkdownReader-win32-x64');
+  if (fs.existsSync(redundantOutDir)) {
+    try { fs.rmSync(redundantOutDir, { recursive: true, force: true }); } catch (_) {}
   }
   if (fs.existsSync(winUnpackedDir)) {
     try { fs.rmSync(winUnpackedDir, { recursive: true, force: true }); } catch (_) {}
@@ -64,21 +64,21 @@ async function build() {
   console.log('--- Step 4: Preparing Pristine Official Electron Runtime ---');
   const electronDist = path.join(rootDir, 'node_modules', 'electron', 'dist');
   
-  if (!fs.existsSync(outDir)) {
-    fs.mkdirSync(outDir, { recursive: true });
+  if (!fs.existsSync(winUnpackedDir)) {
+    fs.mkdirSync(winUnpackedDir, { recursive: true });
   }
 
-  // Copy all files from electronDist except resources
+  // Copy all files from electronDist except resources directly into winUnpackedDir
   const entries = fs.readdirSync(electronDist);
   for (const entry of entries) {
     if (entry === 'resources') continue;
     const src = path.join(electronDist, entry);
-    const dest = path.join(outDir, entry);
+    const dest = path.join(winUnpackedDir, entry);
     if (fs.statSync(src).isDirectory()) {
       fs.cpSync(src, dest, { recursive: true });
     } else {
       if (entry.toLowerCase() === 'electron.exe') {
-        const destExe = path.join(outDir, 'MarkdownReader.exe');
+        const destExe = path.join(winUnpackedDir, 'MarkdownReader.exe');
         try {
           fs.copyFileSync(src, destExe);
         } catch (err) {
@@ -97,7 +97,7 @@ async function build() {
   }
 
   // Set up resources folder with our app.asar
-  const resDir = path.join(outDir, 'resources');
+  const resDir = path.join(winUnpackedDir, 'resources');
   if (fs.existsSync(resDir)) {
     fs.rmSync(resDir, { recursive: true, force: true });
   }
@@ -106,31 +106,68 @@ async function build() {
   fs.unlinkSync(asarPath);
 
   // Copy crisp 256x256 icon.ico right beside MarkdownReader.exe
-  fs.copyFileSync(path.join(rootDir, 'icon.ico'), path.join(outDir, 'icon.ico'));
+  fs.copyFileSync(path.join(rootDir, 'icon.ico'), path.join(winUnpackedDir, 'icon.ico'));
 
-  console.log('--- Step 5: Mirroring to win-unpacked ---');
-  if (!fs.existsSync(winUnpackedDir)) {
-    fs.mkdirSync(winUnpackedDir, { recursive: true });
-  }
-  try {
-    execSync(`robocopy "${outDir}" "${winUnpackedDir}" /mir /np /ndl /nfl /njh /njs`, { stdio: 'ignore' });
-  } catch (e) {
-    // robocopy returns exit code 1 on success when files are copied
-  }
-
-  console.log('--- Step 6: Compressing Release Zip Archive ---');
+  console.log('--- Step 5: Compressing Release Zip Archive ---');
   const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
-  const version = pkg.version || '2.0.1';
+  const version = pkg.version || '2.1.1';
   const zipPath = path.join(rootDir, 'dist-electron', `MarkdownReader-v${version}-win32-x64.zip`);
   try {
-    execSync(`powershell -NoProfile -Command "Compress-Archive -Path '${winUnpackedDir}\\*' -DestinationPath '${zipPath}' -Force"`, { stdio: 'inherit' });
+    // High-performance zip with built-in Windows tar (bsdtar)
+    execSync(`tar -a -c -f "${zipPath}" -C "${winUnpackedDir}" *`, { stdio: 'inherit' });
     const zipSizeMb = (fs.statSync(zipPath).size / 1024 / 1024).toFixed(2);
     console.log(`Release archive generated: ${zipPath} (${zipSizeMb} MB)`);
   } catch (e) {
-    console.warn('Zip generation warning:', e.message);
+    try {
+      execSync(`powershell -NoProfile -Command "Compress-Archive -Path '${winUnpackedDir}\\*' -DestinationPath '${zipPath}' -Force"`, { stdio: 'inherit' });
+      const zipSizeMb = (fs.statSync(zipPath).size / 1024 / 1024).toFixed(2);
+      console.log(`Release archive generated via PowerShell: ${zipPath} (${zipSizeMb} MB)`);
+    } catch (e2) {
+      console.warn('Zip generation warning:', e2.message);
+    }
   }
 
-  console.log('--- Step 7: Adding / Updating Windows Start Menu Shortcut ---');
+  console.log('--- Step 6: Deploying to User PC Documents & Updating File Associations ---');
+  const documentsDir = path.join(os.homedir(), 'Documents');
+  const userInstallDir = path.join(documentsDir, `MarkdownReader-v${version}-win32-x64`);
+  const installedExe = path.join(userInstallDir, 'MarkdownReader.exe');
+  const installedIcon = path.join(userInstallDir, 'icon.ico');
+
+  try {
+    if (!fs.existsSync(userInstallDir)) {
+      fs.mkdirSync(userInstallDir, { recursive: true });
+    }
+    console.log(`Deploying release build to user directory: ${userInstallDir}`);
+    try {
+      execSync(`robocopy "${winUnpackedDir}" "${userInstallDir}" /mir /np /ndl /nfl /njh /njs`, { stdio: 'ignore' });
+    } catch (_) {}
+
+    // Register file associations in Windows Registry
+    console.log('Registering file associations and handlers in Windows Registry...');
+    const regCommands = [
+      `reg add "HKCU\\Software\\Classes\\.md" /ve /d "MarkdownReader.Document" /f`,
+      `reg add "HKCU\\Software\\Classes\\.md\\OpenWithProgids" /v "MarkdownReader.Document" /d "" /f`,
+      `reg add "HKCU\\Software\\Classes\\.markdown" /ve /d "MarkdownReader.Document" /f`,
+      `reg add "HKCU\\Software\\Classes\\.markdown\\OpenWithProgids" /v "MarkdownReader.Document" /d "" /f`,
+      `reg add "HKCU\\Software\\Classes\\MarkdownReader.Document" /ve /d "Markdown Document" /f`,
+      `reg add "HKCU\\Software\\Classes\\MarkdownReader.Document\\DefaultIcon" /ve /d "\\"${installedIcon}\\",0" /f`,
+      `reg add "HKCU\\Software\\Classes\\MarkdownReader.Document\\shell\\open\\command" /ve /d "\\"${installedExe}\\" \\"%1\\"" /f`,
+      `reg add "HKCU\\Software\\Classes\\Applications\\MarkdownReader.exe\\DefaultIcon" /ve /d "\\"${installedIcon}\\",0" /f`,
+      `reg add "HKCU\\Software\\Classes\\Applications\\MarkdownReader.exe\\shell\\open\\command" /ve /d "\\"${installedExe}\\" \\"%1\\"" /f`,
+    ];
+    for (const cmd of regCommands) {
+      try {
+        execSync(cmd, { stdio: 'ignore' });
+      } catch (err) {
+        console.warn(`Registry warning (${cmd}):`, err.message);
+      }
+    }
+    console.log(`✓ Windows file associations registered to: ${installedExe}`);
+  } catch (err) {
+    console.warn('Warning: Could not complete user PC deployment:', err.message);
+  }
+
+  console.log('--- Step 7: Adding / Updating Windows Shortcuts ---');
   try {
     const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
     const startMenuPrograms = path.join(appData, 'Microsoft', 'Windows', 'Start Menu', 'Programs');
@@ -138,15 +175,16 @@ async function build() {
       fs.mkdirSync(startMenuPrograms, { recursive: true });
     }
     const shortcutPath = path.join(startMenuPrograms, 'MarkdownReader.lnk');
-    const exePath = path.join(winUnpackedDir, 'MarkdownReader.exe');
-    const iconPath = path.join(winUnpackedDir, 'icon.ico');
+    const targetExe = fs.existsSync(installedExe) ? installedExe : path.join(winUnpackedDir, 'MarkdownReader.exe');
+    const targetWorkingDir = fs.existsSync(userInstallDir) ? userInstallDir : winUnpackedDir;
+    const targetIcon = fs.existsSync(installedIcon) ? installedIcon : path.join(winUnpackedDir, 'icon.ico');
 
     const psScript = `
       $ws = New-Object -ComObject WScript.Shell;
       $s = $ws.CreateShortcut('${shortcutPath.replace(/'/g, "''")}');
-      $s.TargetPath = '${exePath.replace(/'/g, "''")}';
-      $s.WorkingDirectory = '${winUnpackedDir.replace(/'/g, "''")}';
-      $s.IconLocation = '${iconPath.replace(/'/g, "''")},0';
+      $s.TargetPath = '${targetExe.replace(/'/g, "''")}';
+      $s.WorkingDirectory = '${targetWorkingDir.replace(/'/g, "''")}';
+      $s.IconLocation = '${targetIcon.replace(/'/g, "''")},0';
       $s.Description = 'MarkdownReader - Fast Desktop Markdown Workspace';
       $s.Save();
     `;
@@ -159,9 +197,9 @@ async function build() {
       const psDesktop = `
         $ws = New-Object -ComObject WScript.Shell;
         $s = $ws.CreateShortcut('${desktopShortcutPath.replace(/'/g, "''")}');
-        $s.TargetPath = '${exePath.replace(/'/g, "''")}';
-        $s.WorkingDirectory = '${winUnpackedDir.replace(/'/g, "''")}';
-        $s.IconLocation = '${iconPath.replace(/'/g, "''")},0';
+        $s.TargetPath = '${targetExe.replace(/'/g, "''")}';
+        $s.WorkingDirectory = '${targetWorkingDir.replace(/'/g, "''")}';
+        $s.IconLocation = '${targetIcon.replace(/'/g, "''")},0';
         $s.Description = 'MarkdownReader - Fast Desktop Markdown Workspace';
         $s.Save();
       `;

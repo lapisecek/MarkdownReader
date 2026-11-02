@@ -487,7 +487,7 @@ const EditorComponent = ({ tab, isActive, setUnsaved, onEditorActive, onEditorRe
   const activeFont = resolveFontFamily(settings);
 
   return (
-    <div style={{ display: isActive ? 'block' : 'none', fontFamily: activeFont }} className="h-full w-full relative">
+    <div style={{ display: isActive ? 'block' : 'none', fontFamily: activeFont }} className={`h-full w-full relative ${isActive ? "animate-doc-fade-in" : ""}`}>
       <EditorContent editor={editor} className="h-full" style={{ fontFamily: activeFont }} />
     </div>
   );
@@ -1320,7 +1320,7 @@ function App() {
                     spellCheck={settings.spellCheck}
                     readOnly={tab.isReadOnly}
                   />
-                  <div style={{ display: activeTabId === tab.id && !isSourceMode ? 'block' : 'none', fontFamily: resolveFontFamily(settings) }}>
+                  <div className={`h-full ${activeTabId === tab.id ? "animate-doc-fade-in" : ""}`} style={{ display: activeTabId === tab.id && !isSourceMode ? "block" : "none", fontFamily: resolveFontFamily(settings) }}>
                     <EditorComponent tab={tab} isActive={activeTabId === tab.id && !isSourceMode}
                       setUnsaved={handleSetUnsaved}
                       onEditorActive={setActiveEditor} 

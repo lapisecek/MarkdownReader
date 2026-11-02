@@ -463,3 +463,22 @@ dl.deflist dd { margin-left: 1.5em; color: var(--text-muted); }
 .animate-loading-bar {
   animation: loading-progress 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
+
+@keyframes doc-fade-in {
+  0% {
+    opacity: 0.85;
+    transform: translateY(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-doc-fade-in {
+  animation: doc-fade-in 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.tab-content-container {
+  transition: opacity 0.15s ease-out;
+}

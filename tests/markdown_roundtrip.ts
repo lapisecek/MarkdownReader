@@ -145,5 +145,22 @@ Centered paragraph
   console.log('✓ Test 3: Raw embeds and image attributes passed.');
 }
 
+// Test 4: KaTeX HTML & MathML raw ingestion into math nodes
+{
+  const input = `
+Inline math: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>25</mn><mo>±</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">25 \\pm 1</annotation></semantics></math></span><span class="katex-html"><span class="mord">25</span></span></span>
+
+Block math:
+<div class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>E</mi><mo>=</mo><mi>m</mi><msup><mi>c</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">E = mc^2</annotation></semantics></math></span></span></div>
+  `.trim();
+
+  const ed = createEditor(input);
+  const out = ed.storage.markdown.getMarkdown();
+
+  assert.ok(out.includes('$25 \\pm 1$'), 'Raw KaTeX HTML should convert to $25 \\pm 1$');
+  assert.ok(out.includes('E = mc^2'), 'Raw KaTeX display HTML should convert to block math');
+  console.log('✓ Test 4: Raw KaTeX HTML & MathML conversion passed.');
+}
+
 console.log('\nAll Markdown & HTML Round-Trip Tests Passed Successfully!\n');
 

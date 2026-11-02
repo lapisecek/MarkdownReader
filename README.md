@@ -67,6 +67,9 @@ The application supports mathematical typesetting via offline-bundled KaTeX, int
 
 ### Performance and Startup
 - **Zero White-Flash Startup**: Inline scripts apply theme and background styles before first paint to prevent flashes in dark and light modes.
+- **Ultra-Smooth Document Transitions**: Fluid spring fade-in transitions (`animate-doc-fade-in`) for document loading and tab switching.
+- **Automated Windows Association & Deployment**: Build pipeline automatically registers system file associations and updates Start Menu / Desktop shortcuts to the latest deployed release.
+- **Zero White-Flash Startup**: Inline scripts apply theme and background styles before first paint to prevent flashes in dark and light modes.
 - **Asynchronous File Operations**: High-throughput document streaming powered by Node.js asynchronous filesystem APIs (`fs.promises`).
 - **Large Document Optimization**: ProseMirror indexing and search highlights are capped and optimized to maintain smooth scrolling and editing on large files.
 - **Background Task Indicators**: Progress indicators in the header and status bar inform the user during heavy file operations and large text processing.
@@ -81,6 +84,7 @@ The application supports mathematical typesetting via offline-bundled KaTeX, int
 - **Raw HTML Embeds**: Clean rendering and isolation for `<iframe>`, `<video>`, `<audio>`, `<figure>`, `<canvas>`, and `<svg>` markup.
 
 ### KaTeX Math Formulas
+- **Raw KaTeX HTML & MathML Ingestion**: Seamlessly converts pasted or opened documents containing pre-rendered `<span class="katex">...<annotation>...` or `<math>` elements into editable mathematical formulas.
 - Support for inline equations (`$E=mc^2$`) and display equation blocks (`$$\sum_{i=0}^n i$$`).
 - Bundled offline vector fonts (WOFF2 and TTF) for mathematical rendering without network connectivity.
 - WYSIWYG equation rendering with automatic Markdown serialization.

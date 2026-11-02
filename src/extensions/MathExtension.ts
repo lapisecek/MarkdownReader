@@ -11,6 +11,27 @@ function decodeEntities(str: string): string {
     .replace(/&#39;/g, "'");
 }
 
+function extractLatexFromElement(element: HTMLElement | any): string {
+  if (!element || typeof element.getAttribute !== 'function') return '';
+  const dataLatex = element.getAttribute('data-latex');
+  if (dataLatex) return decodeEntities(dataLatex);
+
+  const annotation = element.querySelector?.('annotation');
+  if (annotation && annotation.textContent?.trim()) {
+    return decodeEntities(annotation.textContent.trim());
+  }
+
+  if (element.tagName?.toLowerCase() === 'annotation' && element.textContent?.trim()) {
+    return decodeEntities(element.textContent.trim());
+  }
+
+  if (element.tagName?.toLowerCase() === 'script' && element.getAttribute('type')?.startsWith('math/tex') && element.textContent?.trim()) {
+    return decodeEntities(element.textContent.trim());
+  }
+
+  return '';
+}
+
 export function markdownItMathPlugin(md: any) {
   if (md.__hasMathPlugin) return;
   md.__hasMathPlugin = true;
@@ -141,11 +162,14 @@ export const MathInline = Node.create({
     return {
       latex: {
         default: '',
-        parseHTML: element => decodeEntities(element.getAttribute('data-latex') || ''),
+        parseHTML: element => extractLatexFromElement(element),
       },
       display: {
         default: false,
-        parseHTML: element => element.getAttribute('data-display') === 'true' || element.classList.contains('katex-math-display'),
+        parseHTML: element =>
+          element.getAttribute('data-display') === 'true' ||
+          element.classList.contains('katex-math-display') ||
+          element.classList.contains('katex-display'),
       },
     };
   },
@@ -158,27 +182,40 @@ export const MathInline = Node.create({
       {
         tag: 'span[data-latex]',
       },
+      {
+        tag: 'span.katex',
+        getAttrs: (element: HTMLElement | string) => {
+          if (typeof element === 'string') return false;
+          if (element.closest?.('.katex-math-inline') || element.closest?.('.katex-math-block') || element.closest?.('.katex-display')) {
+            return false;
+          }
+          const latex = extractLatexFromElement(element);
+          return latex ? { latex } : false;
+        },
+      },
+      {
+        tag: 'math',
+        getAttrs: (element: HTMLElement | string) => {
+          if (typeof element === 'string') return false;
+          if (element.closest?.('.katex-math-inline') || element.closest?.('.katex-math-block') || element.closest?.('.katex-display')) {
+            return false;
+          }
+          const latex = extractLatexFromElement(element);
+          return latex ? { latex } : false;
+        },
+      },
+      {
+        tag: 'script[type="math/tex"]',
+        getAttrs: (element: HTMLElement | string) => {
+          if (typeof element === 'string') return false;
+          const latex = element.textContent?.trim();
+          return latex ? { latex: decodeEntities(latex) } : false;
+        },
+      },
     ];
   },
 
   renderHTML({ HTMLAttributes }) {
-    if (typeof document !== 'undefined') {
-      const span = document.createElement('span');
-      span.className = `katex-math-inline cursor-pointer select-none ${HTMLAttributes.display ? 'katex-math-display' : ''}`;
-      span.setAttribute('data-latex', HTMLAttributes.latex || '');
-      if (HTMLAttributes.display) span.setAttribute('data-display', 'true');
-      span.setAttribute('title', HTMLAttributes.display ? `$$${HTMLAttributes.latex || ''}$$` : `$${HTMLAttributes.latex || ''}$`);
-      try {
-        span.innerHTML = katex.renderToString(HTMLAttributes.latex || '', {
-          displayMode: !!HTMLAttributes.display,
-          throwOnError: false,
-          strict: false,
-        });
-      } catch {
-        span.textContent = HTMLAttributes.display ? `$$${HTMLAttributes.latex || ''}$$` : `$${HTMLAttributes.latex || ''}$`;
-      }
-      return span;
-    }
     return [
       'span',
       mergeAttributes(HTMLAttributes, {
@@ -232,7 +269,7 @@ export const MathBlock = Node.create({
     return {
       latex: {
         default: '',
-        parseHTML: element => decodeEntities(element.getAttribute('data-latex') || ''),
+        parseHTML: element => extractLatexFromElement(element),
       },
     };
   },
@@ -245,25 +282,36 @@ export const MathBlock = Node.create({
       {
         tag: 'div[data-latex]',
       },
+      {
+        tag: 'div.katex-display',
+        getAttrs: (element: HTMLElement | string) => {
+          if (typeof element === 'string') return false;
+          if (element.closest?.('.katex-math-block')) return false;
+          const latex = extractLatexFromElement(element);
+          return latex ? { latex } : false;
+        },
+      },
+      {
+        tag: 'span.katex-display',
+        getAttrs: (element: HTMLElement | string) => {
+          if (typeof element === 'string') return false;
+          if (element.closest?.('.katex-math-block')) return false;
+          const latex = extractLatexFromElement(element);
+          return latex ? { latex } : false;
+        },
+      },
+      {
+        tag: 'script[type="math/tex; mode=display"]',
+        getAttrs: (element: HTMLElement | string) => {
+          if (typeof element === 'string') return false;
+          const latex = element.textContent?.trim();
+          return latex ? { latex: decodeEntities(latex) } : false;
+        },
+      },
     ];
   },
 
   renderHTML({ HTMLAttributes }) {
-    if (typeof document !== 'undefined') {
-      const div = document.createElement('div');
-      div.className = 'katex-math-block my-4 overflow-x-auto text-center py-2 px-3 rounded-lg bg-gray-50/50 dark:bg-white/[0.02] border border-gray-200/50 dark:border-gray-800/50';
-      div.setAttribute('data-latex', HTMLAttributes.latex || '');
-      try {
-        div.innerHTML = katex.renderToString(HTMLAttributes.latex || '', {
-          displayMode: true,
-          throwOnError: false,
-          strict: false,
-        });
-      } catch {
-        div.innerHTML = `<pre class="katex-error"><code>$$${HTMLAttributes.latex || ''}$$</code></pre>`;
-      }
-      return div;
-    }
     return [
       'div',
       mergeAttributes(HTMLAttributes, {
